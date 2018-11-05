@@ -7,7 +7,7 @@ const stringify = require('csv-stringify')
 const vueSrc = '/Users/wendahuang/Desktop/vue/';
 let srcDir = path.resolve(vueSrc, 'src')
 
-const blackList = ['.DS_Store']
+const blackList = ['.DS_Store'],res=[]
 /*
 description: 提取文件中的注释和标识符
  */
@@ -47,7 +47,11 @@ function extractFileInfo(fpath) {
         }
     const comments = ast.comments
     babelTraverse(ast, visitor);
-    console.log(identifiers)
+    res.push({
+    	identifiers:identifiers.join(' '),
+    	comments:comments.map(d=>d.value).join(' '),
+    	fileName:fpath
+    })
 }
 
 /*
@@ -67,11 +71,22 @@ function traverseDir(dir) {
     })
 }
 
+/*
+@desc 将对象转成csv格式并写入文件
+ */
+function write2Csv(res){
+	stringify(res, {
+	    header: true
+	}, (err, data) => {
+	    // console.log(data)
+	    fs.writeFileSync('/Users/wendahuang/Desktop/data/fileData.csv',data)
+	})
+}
+
+// extractFileInfo('../mock/commentId.js')
 traverseDir(srcDir)
-/*const data=[{comments:'what am sfsd',identifiers:['what','hey']}]
-stringify(data,{
-	header:true
-},(err,data)=>{
-	console.log(data)
-})*/
+write2Csv(res)
+
+// console.log(res)
+
 // extractInfo()
