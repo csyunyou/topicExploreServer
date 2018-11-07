@@ -119,10 +119,11 @@ function formatIdentifier(id) {
 function write2Csv(res, fileName) {
     console.log('writing:', fileName)
     stringify(res, {
-        header: true
+        // header: true
     }, (err, data) => {
         // console.log(data)
-        fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
+        // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
+        fs.appendFileSync(`/Users/wendahuang/Desktop/data/vue-all.csv`, data);
         console.log("finish writing:",fileName)
     })
 }
