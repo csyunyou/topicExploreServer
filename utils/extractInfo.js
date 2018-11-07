@@ -41,7 +41,8 @@ function extractFileInfo(fpath) {
                 }
             },
             FunctionDeclaration({ node }) {
-                identifiers.push(node.id.name)
+                // 处理匿名函数
+                node.id && (identifiers.push(node.id.name))
             },
             ClassDeclaration({ node }) {
                 identifiers.push(node.id.name)
@@ -61,7 +62,7 @@ function extractFileInfo(fpath) {
     // console.log('identifiers:', identifiers, fpath)
     res.push({
         identifiers: identifiers.map(formatIdentifier)
-            .reduce((a, b) => a.concat(b),[])
+            .reduce((a, b) => a.concat(b), [])
             .join(' ')
             .toLocaleLowerCase(),
         comments: comments.map(d => d.value).join(' ').toLocaleLowerCase(),
@@ -108,7 +109,7 @@ function write2Csv(res) {
         header: true
     }, (err, data) => {
         // console.log(data)
-        fs.writeFileSync('/Users/wendahuang/Desktop/data/fileData.csv', data)
+        fs.writeFileSync('/Users/wendahuang/Desktop/data/vue-1.0.20.csv', data)
         console.log("finish writing")
     })
 }
