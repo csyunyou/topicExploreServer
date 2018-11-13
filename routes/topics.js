@@ -3,8 +3,7 @@ var router = express.Router();
 var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
-const fileData = getFileData(),topicData=getTopicData()
-
+const fileData = getFileData(), topicData = getTopicData()
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
     res.send({
@@ -16,7 +15,7 @@ router.get('/getAllDocs', function (req, res, next) {
 /**
  * @description 获取主题的关键词
  */
-router.get('/getTopicData',function(req,res,next){
+router.get('/getTopicData', function (req, res, next) {
     res.send(topicData)
 })
 
@@ -91,7 +90,32 @@ function getFileData() {
     })
 }
 
-function getTopicData(){
-    return Array(10).fill(null)
+/**
+ * @description 格式化topic数据
+ */
+function getTopicData() {
+    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-topic.csv', 'utf-8')
+    let topicData = parse(text, {
+        columns: true
+    }), res = [], seg, weight, keyword, topic
+    topicData.forEach(({ index, topic: val }) => {
+        topic = {
+            index: parseInt(index),
+            keywords: []
+        }
+        index = parseInt(index)
+        seg = val.split('+')
+        seg.forEach(d => {
+            [weight, keyword] = (d.split('*'))
+            weight = +weight.trim()
+            keyword = keyword.match(/\"(.*)\"/)[1]
+            topic.keywords.push({
+                weight,
+                keyword
+            })
+        })
+        res.push(topic)
+    })
+    return res
 }
 module.exports = router;
