@@ -35,8 +35,16 @@ function getTopicData() {
  * @param {Cluster} a 
  * @param {Cluster} b 
  */
-function calSim(a,b) {
-
+function calSim({ keywords: a }, { keywrods: b }) {
+    const simThreshold = 0.3, wordsNum = 10,
+        minLen = a.length < b.length ? a.length : b.length
+    let sharedWords = 0, i = 0
+    a.sort((i, j) => j.weight - i.weight)
+    b.sort((i, j) => j.weight - i.weight)
+    while (i < minLen) {
+        if (a[i]===b[i]) sharedWords++
+    }
+    return sharedWords/10
 }
 
 /**
@@ -44,10 +52,10 @@ function calSim(a,b) {
  */
 function cluster() {
     let topicData = getTopicData().map(d => ({
-        key:[d.key],
-        keywords:d.keywords
+        key: [d.key],
+        keywords: d.keywords
     })),
-        simThreshold = 0.3, i = 0, j = 0,
+        i = 0, j = 0,
         maxSim = -1, minSim = 10000, clusterI, clusterJ, simIJ = 0,
         maxI, maxJ, tmpClusterI, tmpClusterJ
     len = topicData.length
