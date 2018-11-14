@@ -1,14 +1,10 @@
 /**
  * @description 草稿本
  */
-let str=' a '
-let obj={a:3}
-res=[]
-res.push(obj)
-obj={b:4}
-console.log(res)
-let str1='"a"'
-console.log(str1)
-console.log(str1.match(/\"(.*)\"/))
-let b="0.023"
-console.log(+b)
+let arr=[1,2,3]
+arr.splice(0,1)
+console.log(arr)
+let brr=[1],crr=[2]
+let drr=brr.concat(crr)
+console.log(brr,drr)
+console.log([1].concat[2])
