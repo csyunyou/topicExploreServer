@@ -3,7 +3,9 @@ var router = express.Router();
 var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
-const fileData = getFileData(), topicData = getTopicData()
+var hCluster = require('../utils/hCluster')
+const fileData = getFileData(), topicData = getTopicData(), topicCluster = getTopicCluster(topicData,fileData)
+
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
     res.send({
@@ -17,6 +19,10 @@ router.get('/getAllDocs', function (req, res, next) {
  */
 router.get('/getTopicData', function (req, res, next) {
     res.send(topicData)
+})
+
+router.get('/getTopicCluster', function (req, res, next) {
+    res.send(topicCluster)
 })
 
 /**
@@ -117,5 +123,25 @@ function getTopicData() {
         res.push(topic)
     })
     return res
+}
+
+/**
+ * @description 返回树状结构组织的聚类结果
+ * @param {Array} topicData 
+ * @param {Array} fileData 
+ */
+function getTopicCluster(topicData,fileData) {
+    const topicCluster = hCluster(topicData)
+    let root = {children:[]}, cluster = null,size=0
+    for (let i = 0, len = topicCluster.length; i < len; i++) {
+        size=0
+        cluster=topicCluster[i]
+        cluster['index'].forEach((idx)=>{
+            size+=fileData.filter(d=>parseInt(d['Dominant_Topic'])===idx).length
+        })
+        cluster['size']=size
+        root.children.push(cluster)
+    }
+    return root
 }
 module.exports = router;
