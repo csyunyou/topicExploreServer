@@ -131,17 +131,17 @@ function getTopicData() {
  * @param {Array} fileData 
  */
 function getTopicCluster(topicData,fileData) {
-    const topicCluster = hCluster(topicData)
-/*     let root = {children:[]}, cluster = null,size=0
-    for (let i = 0, len = topicCluster.length; i < len; i++) {
-        size=0
-        cluster=topicCluster[i]
-        cluster['index'].forEach((idx)=>{
-            size+=fileData.filter(d=>parseInt(d['Dominant_Topic'])===idx).length
+    const root = hCluster(topicData)
+    function dfs(root){
+        if(!root.children){
+            root.size=fileData.filter(d=>parseInt(d['Dominant_Topic'])===root.index[0]).length
+            return
+        }
+        root.children.forEach(child=>{
+            dfs(child)
         })
-        cluster['size']=size
-        root.children.push(cluster)
-    } */
-    return topicCluster
+    }
+    dfs(root)
+    return root
 }
 module.exports = router;
