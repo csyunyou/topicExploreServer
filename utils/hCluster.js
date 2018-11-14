@@ -85,11 +85,15 @@ function cluster(data) {
                 topicData.splice(maxJ,1) */
         topicData.push({
             index: tmpClusterI['index'].concat(tmpClusterJ['index']),
-            keywords: tmpClusterI['keywords'].concat(tmpClusterJ['keywords'])
+            keywords: tmpClusterI['keywords'].concat(tmpClusterJ['keywords']),
+            children:[tmpClusterI,tmpClusterJ]
         })
         len = topicData.length
     }
-    return topicData
+    return {
+        name:'root',
+        children:topicData
+    }
 }
 module.exports = cluster
 /* function main() {

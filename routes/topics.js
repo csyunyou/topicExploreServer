@@ -132,7 +132,7 @@ function getTopicData() {
  */
 function getTopicCluster(topicData,fileData) {
     const topicCluster = hCluster(topicData)
-    let root = {children:[]}, cluster = null,size=0
+/*     let root = {children:[]}, cluster = null,size=0
     for (let i = 0, len = topicCluster.length; i < len; i++) {
         size=0
         cluster=topicCluster[i]
@@ -141,7 +141,7 @@ function getTopicCluster(topicData,fileData) {
         })
         cluster['size']=size
         root.children.push(cluster)
-    }
-    return root
+    } */
+    return topicCluster
 }
 module.exports = router;
