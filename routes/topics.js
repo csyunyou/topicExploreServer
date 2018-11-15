@@ -4,7 +4,9 @@ var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
 var hCluster = require('../utils/hCluster')
-const fileData = getFileData(), topicData = getTopicData(), topicCluster = getTopicCluster(topicData,fileData)
+const fileData = getFileData(), topicData = getTopicData(),
+    topicCluster = getTopicCluster(topicData, fileData),
+    dominantDocs = getDominantDocs()
 
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
@@ -23,6 +25,12 @@ router.get('/getTopicData', function (req, res, next) {
 
 router.get('/getTopicCluster', function (req, res, next) {
     res.send(topicCluster)
+})
+
+router.get('/getDominantDocsByTopic', function (req, res, next) {
+    const topicNum = parseInt(req.query.topicNum),
+        filteredDocs = dominantDocs.filter(d => parseInt(d['Dominant_Topic']) === topicNum)
+    res.send(filteredDocs)
 })
 
 /**
@@ -130,18 +138,28 @@ function getTopicData() {
  * @param {Array} topicData 
  * @param {Array} fileData 
  */
-function getTopicCluster(topicData,fileData) {
+function getTopicCluster(topicData, fileData) {
     const root = hCluster(topicData)
-    function dfs(root){
-        if(!root.children){
-            root.size=fileData.filter(d=>parseInt(d['Dominant_Topic'])===root.index[0]).length
+    function dfs(root) {
+        if (!root.children) {
+            root.size = fileData.filter(d => parseInt(d['Dominant_Topic']) === root.index[0]).length
             return
         }
-        root.children.forEach(child=>{
+        root.children.forEach(child => {
             dfs(child)
         })
     }
     dfs(root)
     return root
+}
+
+/**
+ * @description 获得每个主题的代表文件
+ */
+function getDominantDocs() {
+    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/dominant-documents-per-topic.csv', 'utf-8')
+    return parse(text, {
+        columns: true
+    })
 }
 module.exports = router;
