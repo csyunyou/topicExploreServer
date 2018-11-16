@@ -4,7 +4,7 @@ var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
 var hCluster = require('../utils/hCluster')
-const fileData = getFileData(), topicData = getTopicData(),
+const topicData = getTopicData(), fileData = getFileData(topicData.length),
     topicCluster = getTopicCluster(topicData, fileData),
     dominantDocs = getDominantDocs()
 
@@ -97,11 +97,24 @@ function getVersions() {
     return versions
 }
 
-function getFileData() {
+function getFileData(topicNum) {
     const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-all-versions-topic.csv', 'utf-8')
-    return parse(text, {
+    let tmpTopicCon = [], tmpTopicConItem
+    let fileData = parse(text, {
         columns: true
     })
+    // 用0来补充缺失值
+    fileData.forEach(doc => {
+        tmpTopicContribution = []
+        doc['Topic_Contribution'] = JSON.parse(doc['Topic_Contribution'])
+        for (let num = 0; num < topicNum; num++) {
+            tmpTopicConItem = doc['Topic_Contribution'].find(d => d[0] === num)
+            if (!tmpTopicConItem) tmpTopicContribution.push({ topicId: num, percent: 0 })
+            else tmpTopicContribution.push({ topicId: num, percent: tmpTopicConItem[1] })
+        }
+        doc['Topic_Contribution'] = tmpTopicContribution
+    })
+    return fileData
 }
 
 /**
