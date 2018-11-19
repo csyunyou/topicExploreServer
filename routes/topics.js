@@ -113,6 +113,8 @@ function getFileData(topicNum) {
             else tmpTopicContribution.push({ topicId: num, percent: tmpTopicConItem[1] })
         }
         doc['Topic_Contribution'] = tmpTopicContribution
+        doc['size']=parseInt(doc['size'])
+        doc['func_Num']=parseInt(doc['func_Num'])
     })
     return fileData
 }

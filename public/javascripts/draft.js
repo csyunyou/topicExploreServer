@@ -1,7 +1,9 @@
 /**
  * @description 草稿本
  */
-const str='/Users/wendahuang/Desktop/vue-all-versions/vue-2.4.2/src/compiler/codegen/events.js'
-let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
-console.log(str.match(verReg))
+const _ =require('lodash')
+let arr=[{name:'tom',age:11},{name:'tom',age:12}]
+console.log(_.intersectionBy(arr,d=>d.name))
+console.log(Array.isArray([]))
 // console.log(arr.sort((a,b)=>(b-a)))
+
