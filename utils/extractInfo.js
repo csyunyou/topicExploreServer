@@ -11,7 +11,9 @@ let res = []
 description: 提取文件中的注释和标识符
  */
 function extractFileInfo(fpath) {
+    let funcNum = 0
     const code = fs.readFileSync(fpath, 'utf-8'),
+        fInfo = fs.statSync(fpath),
         identifiers = [],
         ast = babelParser.parse(code, {
             // parse in strict mode and allow module declarations
@@ -48,6 +50,7 @@ function extractFileInfo(fpath) {
             },
             FunctionDeclaration({ node }) {
                 // 处理匿名函数
+                funcNum++
                 node.id && (identifiers.push(node.id.name))
             },
             ClassDeclaration({ node }) {
@@ -72,7 +75,9 @@ function extractFileInfo(fpath) {
             .join(' ')
             .toLocaleLowerCase(),
         comments: comments.map(d => d.value).join(' ').toLocaleLowerCase(),
-        fileName: fpath
+        fileName: fpath,
+        size: fInfo.size,
+        funcNum
     })
 }
 
@@ -124,7 +129,7 @@ function write2Csv(res, fileName) {
         // console.log(data)
         // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
         fs.appendFileSync(`/Users/wendahuang/Desktop/data/vue-all.csv`, data);
-        console.log("finish writing:",fileName)
+        console.log("finish writing:", fileName)
     })
 }
 

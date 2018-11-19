@@ -3,7 +3,10 @@ var router = express.Router();
 var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
-const fileData = getFileData(),topicData=getTopicData()
+var hCluster = require('../utils/hCluster')
+const topicData = getTopicData(), fileData = getFileData(topicData.length),
+    topicCluster = getTopicCluster(topicData, fileData),
+    dominantDocs = getDominantDocs()
 
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
@@ -16,8 +19,18 @@ router.get('/getAllDocs', function (req, res, next) {
 /**
  * @description 获取主题的关键词
  */
-router.get('/getTopicData',function(req,res,next){
+router.get('/getTopicData', function (req, res, next) {
     res.send(topicData)
+})
+
+router.get('/getTopicCluster', function (req, res, next) {
+    res.send(topicCluster)
+})
+
+router.get('/getDominantDocsByTopic', function (req, res, next) {
+    const topicNum = parseInt(req.query.topicNum),
+        filteredDocs = dominantDocs.filter(d => parseInt(d['Dominant_Topic']) === topicNum)
+    res.send(filteredDocs)
 })
 
 /**
@@ -84,14 +97,84 @@ function getVersions() {
     return versions
 }
 
-function getFileData() {
+function getFileData(topicNum) {
     const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-all-versions-topic.csv', 'utf-8')
+    let tmpTopicCon = [], tmpTopicConItem
+    let fileData = parse(text, {
+        columns: true
+    })
+    // 用0来补充缺失值
+    fileData.forEach(doc => {
+        tmpTopicContribution = []
+        doc['Topic_Contribution'] = JSON.parse(doc['Topic_Contribution'])
+        for (let num = 0; num < topicNum; num++) {
+            tmpTopicConItem = doc['Topic_Contribution'].find(d => d[0] === num)
+            if (!tmpTopicConItem) tmpTopicContribution.push({ topicId: num, percent: 0 })
+            else tmpTopicContribution.push({ topicId: num, percent: tmpTopicConItem[1] })
+        }
+        doc['Topic_Contribution'] = tmpTopicContribution
+        doc['size']=parseInt(doc['size'])
+        doc['func_Num']=parseInt(doc['func_Num'])
+    })
+    return fileData
+}
+
+/**
+ * @description 格式化topic数据
+ */
+function getTopicData() {
+    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-topic.csv', 'utf-8')
+    let topicData = parse(text, {
+        columns: true
+    }), res = [], seg, weight, keyword, topic
+    topicData.forEach(({ index, topic: val }) => {
+        topic = {
+            index: parseInt(index),
+            keywords: []
+        }
+        index = parseInt(index)
+        seg = val.split('+')
+        seg.forEach(d => {
+            [weight, keyword] = (d.split('*'))
+            weight = +weight.trim()
+            keyword = keyword.match(/\"(.*)\"/)[1]
+            topic.keywords.push({
+                weight,
+                keyword
+            })
+        })
+        res.push(topic)
+    })
+    return res
+}
+
+/**
+ * @description 返回树状结构组织的聚类结果
+ * @param {Array} topicData 
+ * @param {Array} fileData 
+ */
+function getTopicCluster(topicData, fileData) {
+    const root = hCluster(topicData)
+    function dfs(root) {
+        if (!root.children) {
+            root.size = fileData.filter(d => parseInt(d['Dominant_Topic']) === root.index[0]).length
+            return
+        }
+        root.children.forEach(child => {
+            dfs(child)
+        })
+    }
+    dfs(root)
+    return root
+}
+
+/**
+ * @description 获得每个主题的代表文件
+ */
+function getDominantDocs() {
+    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/dominant-documents-per-topic.csv', 'utf-8')
     return parse(text, {
         columns: true
     })
-}
-
-function getTopicData(){
-    return Array(10).fill(null)
 }
 module.exports = router;
