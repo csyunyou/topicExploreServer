@@ -113,8 +113,10 @@ function getFileData(topicNum) {
             else tmpTopicContribution.push({ topicId: num, percent: tmpTopicConItem[1] })
         }
         doc['Topic_Contribution'] = tmpTopicContribution
-        doc['size']=parseInt(doc['size'])
-        doc['func_Num']=parseInt(doc['func_Num'])
+        doc['size'] = parseInt(doc['size'])
+        doc['func_Num'] = parseInt(doc['func_Num'])
+        doc['Perc_Contribution'] = Number(doc['Perc_Contribution'])
+        doc['commentArr'] = JSON.parse(doc['commentArr'])
     })
     return fileData
 }
