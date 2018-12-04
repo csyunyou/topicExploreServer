@@ -46,9 +46,11 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
             type: 'dir',
             children: []
         },
-        blackList = ['.DS_Store']
+        blackList = ['.DS_Store'],
+        curDoc = null
     readDirSync(directory, root)
     res.send(root)
+
 
     function readDirSync(rootPath, root) {
         var pa = fs.readdirSync(rootPath);
@@ -63,10 +65,12 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                 root.children.push(tmpdir)
                 readDirSync(curPath, tmpdir);
             } else {
+                curDoc = filteredTopicData.find(d => d.filename === curPath)
                 root.children.push({
                     name: curPath,
                     type: 'file',
-                    topic: filteredTopicData.find(d => d.filename === curPath)['Dominant_Topic']
+                    topic: curDoc['Dominant_Topic'],
+                    id: curDoc['id']
                 })
                 // console.log("file: "+ele)
             }
