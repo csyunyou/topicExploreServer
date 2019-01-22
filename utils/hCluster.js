@@ -38,11 +38,17 @@ function getTopicData() {
 function calSim({ keywords: a }, { keywords: b }) {
     const wordsNum = 10,
         minLen = a.length < b.length ? a.length : b.length
-    let sharedWords = 0, i = 0
+    let sharedWords = 0, i = 0, word2Cnt = {}
     a.sort((i, j) => j.weight - i.weight)
     b.sort((i, j) => j.weight - i.weight)
-    while (i < minLen) {
-        if (a[i].keyword === b[i].keyword) {
+    while (i < wordsNum) {
+        word2Cnt[a[i].keyword] ? word2Cnt[a[i].keyword]++ : word2Cnt[a[i].keyword] = 1
+        i++
+    }
+    i=0
+    while (i < wordsNum) {
+        if(word2Cnt[b[i].keyword]===1){
+            console.log(b[i].keyword)
             sharedWords++
         }
         i++
@@ -70,6 +76,7 @@ function cluster(data) {
             for (j = i + 1; j < len; j++) {
                 clusterJ = topicData[j]
                 simIJ = calSim(clusterI, clusterJ)
+                console.log(i, j, simIJ)
                 if (simIJ > maxSim) {
                     maxI = i
                     maxJ = j
@@ -86,13 +93,13 @@ function cluster(data) {
         topicData.push({
             index: tmpClusterI['index'].concat(tmpClusterJ['index']),
             keywords: tmpClusterI['keywords'].concat(tmpClusterJ['keywords']),
-            children:[tmpClusterI,tmpClusterJ]
+            children: [tmpClusterI, tmpClusterJ]
         })
         len = topicData.length
     }
     return {
-        name:'root',
-        children:topicData
+        name: 'root',
+        children: topicData
     }
 }
 module.exports = cluster

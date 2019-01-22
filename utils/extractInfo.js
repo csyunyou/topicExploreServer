@@ -67,6 +67,7 @@ function extractFileInfo(fpath) {
             }
         }
     const comments = ast.comments
+    // console.log(comments)
     babelTraverse(ast, visitor);
     // console.log('identifiers:', identifiers, fpath)
     res.push({
@@ -74,7 +75,8 @@ function extractFileInfo(fpath) {
             .reduce((a, b) => a.concat(b), [])
             .join(' ')
             .toLocaleLowerCase(),
-        comments: comments.map(d => d.value).join(' ').toLocaleLowerCase(),
+        commentsArr: comments.map(d => d.value.toLowerCase()),
+        comments:comments.map(d => d.value).join(' ').toLocaleLowerCase(),
         fileName: fpath,
         size: fInfo.size,
         funcNum
@@ -146,7 +148,9 @@ function main() {
         stat.isDirectory() && extractText(fpath)
     }
 }
+// console.log(path.resolve(__dirname,'../public/javascripts/draft.js'))
 main()
+// extractFileInfo(path.resolve(__dirname,'../public/javascripts/draft.js'))
 /* traverseDir(srcDir)
 write2Csv(res) */
 
