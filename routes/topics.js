@@ -40,7 +40,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     const verReg = /vue-(\d*\.\d*\.\d*)/
     const version = req.query.version,
         filteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === version)
-    let directory = path.resolve('/Users/wendahuang/Desktop/vue-all-versions', `vue-${version}`, 'src'),
+    let directory = path.resolve('c:/Users/50809/desktop/vue-all-versions', `vue-${version}`, 'src'),
         root = {
             name: directory,
             type: 'dir',
@@ -48,9 +48,14 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
         },
         blackList = ['.DS_Store'],
         curDoc = null
+    console.log(filteredTopicData[0])
     readDirSync(directory, root)
     res.send(root)
 
+    function convertSlash(path){
+        let slashReg=/\\/g
+        return path.replace(slashReg,'/')
+    }
 
     function readDirSync(rootPath, root) {
         var pa = fs.readdirSync(rootPath);
@@ -65,7 +70,12 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                 root.children.push(tmpdir)
                 readDirSync(curPath, tmpdir);
             } else {
-                curDoc = filteredTopicData.find(d => d.filename === curPath)
+                let convertPath=convertSlash(curPath)
+                curDoc = filteredTopicData.find(d => d.filename === convertPath)
+                if(curDoc===undefined){
+                    console.log(curPath)
+                    return
+                }
                 root.children.push({
                     name: curPath,
                     type: 'file',
@@ -79,7 +89,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
 })
 
 function getVersions() {
-    const vueSrc = '/Users/wendahuang/Desktop/vue-all-versions',
+    const vueSrc = 'c:/Users/50809/desktop/vue-all-versions',
         files = fs.readdirSync(vueSrc)
     let fpath = null
     let verReg = /vue-(\d*\.\d*\.\d*)/
@@ -102,7 +112,7 @@ function getVersions() {
 }
 
 function getFileData(topicNum) {
-    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-all-versions-topic.csv', 'utf-8')
+    const text = fs.readFileSync('c:/Users/50809/desktop/data/vue-all-versions-topic.csv', 'utf-8')
     let tmpTopicCon = [], tmpTopicConItem
     let fileData = parse(text, {
         columns: true
@@ -129,7 +139,7 @@ function getFileData(topicNum) {
  * @description 格式化topic数据
  */
 function getTopicData() {
-    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/vue-topic.csv', 'utf-8')
+    const text = fs.readFileSync('c:/Users/50809/desktop/data/vue-topic.csv', 'utf-8')
     let topicData = parse(text, {
         columns: true
     }), res = [], seg, weight, keyword, topic
@@ -178,7 +188,7 @@ function getTopicCluster(topicData, fileData) {
  * @description 获得每个主题的代表文件
  */
 function getDominantDocs() {
-    const text = fs.readFileSync('/Users/wendahuang/Desktop/data/dominant-documents-per-topic.csv', 'utf-8')
+    const text = fs.readFileSync('c:/Users/50809/desktop/data/dominant-documents-per-topic.csv', 'utf-8')
     return parse(text, {
         columns: true
     })
