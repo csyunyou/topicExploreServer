@@ -40,28 +40,31 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     const verReg = /vue-(\d*\.\d*\.\d*)/
     const version = req.query.version,
         filteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === version)
-    let directory = path.resolve('c:/Users/50809/desktop/vue-all-versions', `vue-${version}`, 'src'),
+
+    let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${version}`, 'src')
+    let directory = vueDir.replace(/\\/g, '\\\\')
         root = {
-            name: directory,
+            name: vueDir,
             type: 'dir',
             children: []
         },
-        blackList = ['.DS_Store'],
+        // blackList = ['.DS_Store'],
         curDoc = null
-    console.log(filteredTopicData[0])
-    readDirSync(directory, root)
+    // console.log(filteredTopicData[0])
+    readDirSync(directory, root)    
+    console.log(root)
     res.send(root)
 
     function convertSlash(path){
         let slashReg=/\\/g
-        return path.replace(slashReg,'/')
+        return path.replace(slashReg,'\\\\')
     }
 
     function readDirSync(rootPath, root) {
         var pa = fs.readdirSync(rootPath);
         pa.forEach(function (ele, index) {
             // console.log(ele)
-            if (blackList.indexOf(ele) !== -1) return
+            // if (blackList.indexOf(ele) !== -1) return
             var curPath = path.resolve(rootPath, ele),
                 info = fs.statSync(curPath)
             if (info.isDirectory()) {
@@ -73,7 +76,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                 let convertPath=convertSlash(curPath)
                 curDoc = filteredTopicData.find(d => d.filename === convertPath)
                 if(curDoc===undefined){
-                    console.log(curPath)
+                    // console.log(curPath)
                     return
                 }
                 root.children.push({
@@ -89,8 +92,9 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
 })
 
 function getVersions() {
-    const vueSrc = 'c:/Users/50809/desktop/vue-all-versions',
-        files = fs.readdirSync(vueSrc)
+    let vueDir = path.join(__dirname, '../data/vue-all-versions')
+    const vueSrc = vueDir.replace(/\\/g, '\\\\')
+    const files = fs.readdirSync(vueSrc)
     let fpath = null
     let verReg = /vue-(\d*\.\d*\.\d*)/
     let versions = []
@@ -112,13 +116,18 @@ function getVersions() {
 }
 
 function getFileData(topicNum) {
-    const text = fs.readFileSync('c:/Users/50809/desktop/data/vue-all-versions-topic.csv', 'utf-8')
+    let filepath = path.join(__dirname, '../data/deal-data/vue-all-versions-topic.csv')
+    const fpath = filepath.replace(/\\/g, '\\\\')
+
+    const text = fs.readFileSync(fpath, 'utf-8')
     let tmpTopicCon = [], tmpTopicConItem
     let fileData = parse(text, {
         columns: true
     })
     // 用0来补充缺失值
     fileData.forEach(doc => {
+        let filename = path.join(__dirname, '../data', doc['filename'])
+        doc['filename'] = filename.replace(/\\/g, '\\\\')
         tmpTopicContribution = []
         doc['Topic_Contribution'] = JSON.parse(doc['Topic_Contribution'])
         for (let num = 0; num < topicNum; num++) {
@@ -139,7 +148,10 @@ function getFileData(topicNum) {
  * @description 格式化topic数据
  */
 function getTopicData() {
-    const text = fs.readFileSync('c:/Users/50809/desktop/data/vue-topic.csv', 'utf-8')
+    let filepath = path.join(__dirname, '../data/deal-data/vue-topic.csv')
+    const fpath = filepath.replace(/\\/g, '\\\\')
+
+    const text = fs.readFileSync(fpath, 'utf-8')
     let topicData = parse(text, {
         columns: true
     }), res = [], seg, weight, keyword, topic
@@ -188,7 +200,10 @@ function getTopicCluster(topicData, fileData) {
  * @description 获得每个主题的代表文件
  */
 function getDominantDocs() {
-    const text = fs.readFileSync('c:/Users/50809/desktop/data/dominant-documents-per-topic.csv', 'utf-8')
+    let filepath = path.join(__dirname, '../data/deal-data/dominant-documents-per-topic.csv')
+    const fpath = filepath.replace(/\\/g, '\\\\')
+
+    const text = fs.readFileSync(fpath, 'utf-8')
     return parse(text, {
         columns: true
     })

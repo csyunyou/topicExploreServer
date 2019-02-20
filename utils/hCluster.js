@@ -48,7 +48,7 @@ function calSim({ keywords: a }, { keywords: b }) {
     i=0
     while (i < wordsNum) {
         if(word2Cnt[b[i].keyword]===1){
-            console.log(b[i].keyword)
+            // console.log(b[i].keyword)
             sharedWords++
         }
         i++
@@ -76,7 +76,7 @@ function cluster(data) {
             for (j = i + 1; j < len; j++) {
                 clusterJ = topicData[j]
                 simIJ = calSim(clusterI, clusterJ)
-                console.log(i, j, simIJ)
+                // console.log(i, j, simIJ)
                 if (simIJ > maxSim) {
                     maxI = i
                     maxJ = j
