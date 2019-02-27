@@ -1,5 +1,6 @@
 var express = require('express');
 var router = express.Router();
+var readline = require('readline');
 var fs = require('fs');
 var parse = require('csv-parse/lib/sync')
 var path = require('path')
@@ -34,6 +35,28 @@ router.get('/getDominantDocsByTopic', function (req, res, next) {
 })
 
 /**
+ * @description 获取源代码
+ */
+router.get('/getCode', function (req, res, next) {
+    // var text = fs.readFileSync(req.query.filepath, 'utf-8')
+    var fRead = fs.createReadStream(req.query.filepath)
+    var objReadline = readline.createInterface({
+        input: fRead
+    })
+    var arr = []
+    objReadline.on('line', (line) => {
+        arr.push(line)
+    })
+    objReadline.on('close', () => {
+        callback(arr)
+        console.log('read close...')
+    })
+    function callback(data){
+        res.send(data)
+    }
+})
+
+/**
  * @description 根据版本号获取主题在文件中的分布
  */
 router.get('/getTopicDisByVersion', function (req, res, next) {
@@ -52,7 +75,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
         curDoc = null
     // console.log(filteredTopicData[0])
     readDirSync(directory, root)    
-    console.log(root)
+    // console.log(root)
     res.send(root)
 
     function convertSlash(path){
@@ -208,4 +231,6 @@ function getDominantDocs() {
         columns: true
     })
 }
+
+
 module.exports = router;
