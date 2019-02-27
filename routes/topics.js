@@ -61,10 +61,9 @@ router.get('/getCode', function (req, res, next) {
  */
 router.get('/getTopicDisByVersion', function (req, res, next) {
     const verReg = /vue-(\d*\.\d*\.\d*)/
-    const version = req.query.version,
-        filteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === version)
-
-    let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${version}`, 'src')
+    const curv = req.query.curv,
+        curvFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === curv)
+    let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${curv}`, 'src')
     let directory = vueDir.replace(/\\/g, '\\\\')
         root = {
             name: vueDir,
@@ -74,8 +73,14 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
         // blackList = ['.DS_Store'],
         curDoc = null
     // console.log(filteredTopicData[0])
-    readDirSync(directory, root)    
-    // console.log(root)
+    readDirSync(directory, root, curvFilteredTopicData, 'curv') 
+    
+    // 增加上一版本的文件
+    const prev = req.query.prev,
+        prevFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === prev)
+    let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
+    addPrevFile(convertSlash(prevDir), root)
+
     res.send(root)
 
     function convertSlash(path){
@@ -83,7 +88,8 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
         return path.replace(slashReg,'\\\\')
     }
 
-    function readDirSync(rootPath, root) {
+    // 读取文件夹下的子文件
+    function readDirSync(rootPath, root, topicData, strv) {
         var pa = fs.readdirSync(rootPath);
         pa.forEach(function (ele, index) {
             // console.log(ele)
@@ -92,12 +98,12 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                 info = fs.statSync(curPath)
             if (info.isDirectory()) {
                 // console.log("dir: "+ele)
-                let tmpdir = { name: curPath, children: [], type: 'dir' }
+                let tmpdir = { name: curPath, children: [], type: 'dir', version: strv }
                 root.children.push(tmpdir)
-                readDirSync(curPath, tmpdir);
+                readDirSync(curPath, tmpdir, topicData, strv);
             } else {
                 let convertPath=convertSlash(curPath)
-                curDoc = filteredTopicData.find(d => d.filename === convertPath)
+                curDoc = topicData.find(d => d.filename === convertPath)
                 if(curDoc===undefined){
                     // console.log(curPath)
                     return
@@ -106,10 +112,44 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                     name: curPath,
                     type: 'file',
                     topic: curDoc['Dominant_Topic'],
-                    id: curDoc['id']
+                    id: curDoc['id'],
+                    version: strv 
                 })
                 // console.log("file: "+ele)
             }
+        })
+    }
+
+    function addPrevFile(rootPath, root){
+        var pa = fs.readdirSync(rootPath)
+        pa.forEach(function(ele, index) {
+            var curPath = path.resolve(rootPath, ele),
+                info = fs.statSync(curPath)
+            var i=0
+            for(; i<root.children.length; i++) {
+                var dirName = root.children[i].name
+                dirName = dirName.substr(dirName.lastIndexOf('\\')+1)
+                if(ele === dirName){
+                    if(info.isDirectory())
+                        addPrevFile(curPath, root.children[i])
+                    break
+                }     
+            }
+            if(i === root.children.length){
+                if(info.isDirectory())
+                    readDirSync(curPath, root, prevFilteredTopicData, 'prev')
+                else {
+                    let convertPath=convertSlash(curPath)
+                    curDoc = prevFilteredTopicData.find(d => d.filename === convertPath)
+                    root.children.push({
+                        name: curPath,
+                        type: 'file',
+                        topic: curDoc['Dominant_Topic'],
+                        id: curDoc['id'],
+                        version: 'prev' 
+                    })
+                }
+            }     
         })
     }
 })
