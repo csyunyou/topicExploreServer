@@ -132,6 +132,11 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
                 if(ele === dirName){
                     if(info.isDirectory())
                         addPrevFile(curPath, root.children[i])
+                    else{
+                        let convertPath=convertSlash(curPath)
+                        curDoc = prevFilteredTopicData.find(d => d.filename === convertPath)
+                        root.children[i]['preId'] = curDoc['id']
+                    }
                     break
                 }     
             }
