@@ -2,12 +2,14 @@ var express = require('express');
 var router = express.Router();
 var readline = require('readline');
 var fs = require('fs');
-var parse = require('csv-parse/lib/sync')
-var path = require('path')
-var hCluster = require('../utils/hCluster')
+var parse = require('csv-parse/lib/sync');
+var path = require('path');
+var hCluster = require('../utils/hCluster');
+var _ = require('lodash');
+
 const topicData = getTopicData(), fileData = getFileData(topicData.length),
     topicCluster = getTopicCluster(topicData, fileData),
-    dominantDocs = getDominantDocs()
+    dominantDocs = getDominantDocs(), normData = getNormOfDiffVecs(topicData, fileData)
 
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
@@ -54,6 +56,13 @@ router.get('/getCode', function (req, res, next) {
     function callback(data){
         res.send(data)
     }
+})
+
+/**
+ * @description 获取前后版本向量差的模
+ */
+router.get('/getNormOfDiffVecs', function(req, res, next){
+    res.send(normData)
 })
 
 /**
@@ -277,5 +286,79 @@ function getDominantDocs() {
     })
 }
 
+/**
+ * @description 计算前后版本的主题向量差之模
+ */
+function getNormOfDiffVecs(topicData, fileData) {
+    var versions = getVersions()
+    var diffVecs = [Array(topicData.length).fill(0)]
+
+    var prev = versions[0], 
+        curv,
+        prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
+        curvDocs
+    
+    // 第一个版本的主题向量差为当前所有文件的主题向量和
+    prevDocs.forEach(doc => {
+        let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+        diffVecs[0] = diffVecs[0].map((d, i) => d+curvVec[i])
+    })
+
+    for(let i=1; i<versions.length; i++) {
+        curv = versions[i]
+        curvDocs = fileData.filter(d => getVersion(d.filename) === curv)
+        let addDocs = _.differenceBy(curvDocs, prevDocs, d => getRelPath(d['filename'])),
+            delDocs = _.differenceBy(prevDocs, curvDocs, d => getRelPath(d['filename'])),
+            editDocsObj = _.groupBy(prevDocs.concat(curvDocs), d => getRelPath(d['filename']))
+        
+        let diffVec = Array(topicData.length).fill(0)
+        // 增加文件的diffvec = curdocvec
+        addDocs.forEach(doc => {
+            let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+            diffVec = diffVec.map((d, i) => d+curvVec[i])
+        })
+        // 删除文件的diffvec = -predocvec
+        delDocs.forEach(doc => {
+            let prevVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+            diffVec = diffVec.map((d, i) => d-prevVec[i])
+        })
+        // 修改文件的diffvec = curdocvec-predocvec
+        Object.keys(editDocsObj).forEach(key => {
+            let preData, nextData, version
+            if(editDocsObj[key].length === 2){
+                for (let j = 0; j < editDocsObj[key].length; j++) {
+                    version = getVersion(editDocsObj[key][j].filename)
+                    if (version === prev) preData = editDocsObj[key][j]
+                    else nextData = editDocsObj[key][j]
+                }
+                let prevVec = preData['Topic_Contribution'].map(topic => topic['percent']),
+                    curvVec = nextData['Topic_Contribution'].map(topic => topic['percent'])
+                diffVec = diffVec.map((d,i) => d+(curvVec[i]-prevVec[i]))
+            }
+        })
+        diffVecs.push(diffVec)
+        prev = curv
+        prevDocs = curvDocs 
+    }
+    // 计算各个diffvec的模
+    var norm = []
+    diffVecs.forEach((vec, i) => {
+        vec = vec.map(d => d*d)
+        norm.push(Math.sqrt(vec.reduce(getSum)))
+    })
+    return norm
+}
+
+function getSum(total, num){
+    return total+num
+}
+function getVersion (fileName) {
+    let verReg = /vue-(\d*\.\d*\.\d*)/
+    return fileName.match(verReg)[1]
+}
+function getRelPath (fileName) {
+    let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
+    return fileName.match(verReg)[2]
+}
 
 module.exports = router;
