@@ -291,18 +291,18 @@ function getDominantDocs() {
  */
 function getNormOfDiffVecs(topicData, fileData) {
     var versions = getVersions()
-    var diffVecs = [Array(topicData.length).fill(0)]
+    var diffVecs = []
 
     var prev = versions[0], 
         curv,
         prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
         curvDocs
     
-    // 第一个版本的主题向量差为当前所有文件的主题向量和
-    prevDocs.forEach(doc => {
-        let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-        diffVecs[0] = diffVecs[0].map((d, i) => d+curvVec[i])
-    })
+    // // 第一个版本的主题向量差为当前所有文件的主题向量和
+    // prevDocs.forEach(doc => {
+    //     let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+    //     diffVecs[0] = diffVecs[0].map((d, i) => d+curvVec[i])
+    // })
 
     for(let i=1; i<versions.length; i++) {
         curv = versions[i]
@@ -341,10 +341,13 @@ function getNormOfDiffVecs(topicData, fileData) {
         prevDocs = curvDocs 
     }
     // 计算各个diffvec的模
-    var norm = []
+    var norm = [{ver: versions[0], val: 0}]
     diffVecs.forEach((vec, i) => {
         vec = vec.map(d => d*d)
-        norm.push(Math.sqrt(vec.reduce(getSum)))
+        norm.push({
+            ver: versions[i+1],
+            val: Math.sqrt(vec.reduce(getSum))
+        })
     })
     return norm
 }
