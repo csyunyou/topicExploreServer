@@ -65,6 +65,13 @@ router.get('/getNormOfDiffVecs', function(req, res, next){
     res.send(normData)
 })
 
+router.get('/getDiffDocs', function(req,res,next){
+    let prev = req.query.prev,
+        curv = req.query.curv
+    const diffDocs = getDiffDocs(prev, curv, fileData)
+    res.send(diffDocs)
+})
+
 /**
  * @description 根据版本号获取主题在文件中的分布
  */
@@ -73,7 +80,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     const curv = req.query.curv,
         curvFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === curv)
     let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${curv}`, 'src')
-    let directory = vueDir.replace(/\\/g, '\\\\')
+    let directory = vueDir.replace(/\\/g, '\\\\'),
         root = {
             name: vueDir,
             type: 'dir',
@@ -85,10 +92,12 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     readDirSync(directory, root, curvFilteredTopicData, 'curv') 
     
     // 增加上一版本的文件
-    const prev = req.query.prev,
+    const prev = req.query.prev
+    if(prev){
         prevFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === prev)
-    let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
-    addPrevFile(convertSlash(prevDir), root)
+        let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
+        addPrevFile(convertSlash(prevDir), root)
+    }
 
     res.send(root)
 
@@ -362,6 +371,54 @@ function getVersion (fileName) {
 function getRelPath (fileName) {
     let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
     return fileName.match(verReg)[2]
+}
+
+// 获取指定版本范围后, 前后版本间的文件
+function getDiffDocs(prev, curv, fileData){
+    var prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
+        curvDocs = fileData.filter(d => getVersion(d.filename) === curv)
+    let addDocs = _.differenceBy(curvDocs, prevDocs, d => getRelPath(d['filename'])),
+        delDocs = _.differenceBy(prevDocs, curvDocs, d => getRelPath(d['filename'])),
+        editDocsObj = _.groupBy(prevDocs.concat(curvDocs), d => getRelPath(d['filename']))
+    
+    var diffDocs = []
+    addDocs.forEach(doc => {
+        let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+        diffDocs.push({
+            fileName: [doc.filename],
+            vec: curvVec,
+            type: 'add',
+            fileIds: [doc.id],
+        })
+    })
+    delDocs.forEach(doc => {
+        let prevVec = doc['Topic_Contribution'].map(topic => -topic['percent'])
+        diffDocs.push({
+            fileName: [doc.filename],
+            vec: prevVec,
+            type: 'del',
+            fileIds: [doc.id]
+        })
+    })
+    Object.keys(editDocsObj).forEach(key => {
+        let preData, nextData, version
+        if(editDocsObj[key].length === 2){
+            for (let j = 0; j < editDocsObj[key].length; j++) {
+                version = getVersion(editDocsObj[key][j].filename)
+                if (version === prev) preData = editDocsObj[key][j]
+                else nextData = editDocsObj[key][j]
+            }
+            let prevVec = preData['Topic_Contribution'].map(topic => topic['percent']),
+                curvVec = nextData['Topic_Contribution'].map(topic => topic['percent'])
+            diffDocs.push({
+                fileName: [preData.filename, nextData.filename],
+                vec: curvVec.map((d,i) => d - prevVec[i]),
+                type: 'edit',
+                fileIds: [preData.id, nextData.id]
+            })
+        }
+    })
+    return diffDocs
 }
 
 module.exports = router;
