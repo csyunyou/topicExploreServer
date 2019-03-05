@@ -40,22 +40,23 @@ router.get('/getDominantDocsByTopic', function (req, res, next) {
  * @description 获取源代码
  */
 router.get('/getCode', function (req, res, next) {
-    // var text = fs.readFileSync(req.query.filepath, 'utf-8')
-    var fRead = fs.createReadStream(req.query.filepath)
-    var objReadline = readline.createInterface({
-        input: fRead
-    })
-    var arr = []
-    objReadline.on('line', (line) => {
-        arr.push(line)
-    })
-    objReadline.on('close', () => {
-        callback(arr)
-        console.log('read close...')
-    })
-    function callback(data){
-        res.send(data)
-    }
+    var text = fs.readFileSync(req.query.filepath, 'utf-8')
+    res.send(text)
+    // var fRead = fs.createReadStream(req.query.filepath)
+    // var objReadline = readline.createInterface({
+    //     input: fRead
+    // })
+    // var arr = []
+    // objReadline.on('line', (line) => {
+    //     arr.push(line)
+    // })
+    // objReadline.on('close', () => {
+    //     callback(arr)
+    //     console.log('read close...')
+    // })
+    // function callback(data){
+    //     res.send(data)
+    // }
 })
 
 /**
@@ -85,10 +86,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
             name: vueDir,
             type: 'dir',
             children: []
-        },
-        // blackList = ['.DS_Store'],
-        curDoc = null
-    // console.log(filteredTopicData[0])
+        }
     readDirSync(directory, root, curvFilteredTopicData, 'curv') 
     
     // 增加上一版本的文件
@@ -96,86 +94,95 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     if(prev){
         prevFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === prev)
         let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
-        addPrevFile(convertSlash(prevDir), root)
+        addPrevFile(convertSlash(prevDir), root, prevFilteredTopicData)
+
+        var diffDocs = getDiffDocs(prev, curv, fileData)
+        diffDocs.forEach(doc =>{
+            let vec = doc.vec
+            vec = vec.map(d => d*d)
+            let norm = Math.sqrt(vec.reduce(getSum))
+            doc['norm'] = norm
+        })
+        res.send({root: root, diffDocs: diffDocs})
     }
+    else
+        res.send(root) 
+})
 
-    res.send(root)
+function convertSlash(path){
+    let slashReg=/\\/g
+    return path.replace(slashReg,'\\\\')
+}
 
-    function convertSlash(path){
-        let slashReg=/\\/g
-        return path.replace(slashReg,'\\\\')
-    }
+// 读取文件夹下的子文件
+function readDirSync(rootPath, root, topicData, strv) {
+    var pa = fs.readdirSync(rootPath);
+    pa.forEach(function (ele, index) {
+        // console.log(ele)
+        // if (blackList.indexOf(ele) !== -1) return
+        var curPath = path.resolve(rootPath, ele),
+            info = fs.statSync(curPath)
+        if (info.isDirectory()) {
+            // console.log("dir: "+ele)
+            let tmpdir = { name: curPath, children: [], type: 'dir', version: strv }
+            root.children.push(tmpdir)
+            readDirSync(curPath, tmpdir, topicData, strv);
+        } else {
+            let convertPath=convertSlash(curPath)
+            let curDoc = topicData.find(d => d.filename === convertPath)
+            if(curDoc===undefined){
+                // console.log(curPath)
+                return
+            }
+            root.children.push({
+                name: curPath,
+                type: 'file',
+                topic: curDoc['Dominant_Topic'],
+                id: curDoc['id'],
+                version: strv 
+            })
+            // console.log("file: "+ele)
+        }
+    })
+}
 
-    // 读取文件夹下的子文件
-    function readDirSync(rootPath, root, topicData, strv) {
-        var pa = fs.readdirSync(rootPath);
-        pa.forEach(function (ele, index) {
-            // console.log(ele)
-            // if (blackList.indexOf(ele) !== -1) return
-            var curPath = path.resolve(rootPath, ele),
-                info = fs.statSync(curPath)
-            if (info.isDirectory()) {
-                // console.log("dir: "+ele)
-                let tmpdir = { name: curPath, children: [], type: 'dir', version: strv }
-                root.children.push(tmpdir)
-                readDirSync(curPath, tmpdir, topicData, strv);
-            } else {
+function addPrevFile(rootPath, root, topicData){
+    var pa = fs.readdirSync(rootPath)
+    pa.forEach(function(ele, index) {
+        var curPath = path.resolve(rootPath, ele),
+            info = fs.statSync(curPath)
+        var i=0
+        for(; i<root.children.length; i++) {
+            var dirName = root.children[i].name
+            dirName = dirName.substr(dirName.lastIndexOf('\\')+1)
+            if(ele === dirName){
+                if(info.isDirectory())
+                    addPrevFile(curPath, root.children[i], topicData)
+                else{
+                    let convertPath=convertSlash(curPath)
+                    curDoc = topicData.find(d => d.filename === convertPath)
+                    root.children[i]['preId'] = curDoc['id']
+                }
+                break
+            }     
+        }
+        if(i === root.children.length){
+            if(info.isDirectory())
+                readDirSync(curPath, root, topicData, 'prev')
+            else {
                 let convertPath=convertSlash(curPath)
                 curDoc = topicData.find(d => d.filename === convertPath)
-                if(curDoc===undefined){
-                    // console.log(curPath)
-                    return
-                }
                 root.children.push({
                     name: curPath,
                     type: 'file',
                     topic: curDoc['Dominant_Topic'],
                     id: curDoc['id'],
-                    version: strv 
+                    version: 'prev' 
                 })
-                // console.log("file: "+ele)
             }
-        })
-    }
-
-    function addPrevFile(rootPath, root){
-        var pa = fs.readdirSync(rootPath)
-        pa.forEach(function(ele, index) {
-            var curPath = path.resolve(rootPath, ele),
-                info = fs.statSync(curPath)
-            var i=0
-            for(; i<root.children.length; i++) {
-                var dirName = root.children[i].name
-                dirName = dirName.substr(dirName.lastIndexOf('\\')+1)
-                if(ele === dirName){
-                    if(info.isDirectory())
-                        addPrevFile(curPath, root.children[i])
-                    else{
-                        let convertPath=convertSlash(curPath)
-                        curDoc = prevFilteredTopicData.find(d => d.filename === convertPath)
-                        root.children[i]['preId'] = curDoc['id']
-                    }
-                    break
-                }     
-            }
-            if(i === root.children.length){
-                if(info.isDirectory())
-                    readDirSync(curPath, root, prevFilteredTopicData, 'prev')
-                else {
-                    let convertPath=convertSlash(curPath)
-                    curDoc = prevFilteredTopicData.find(d => d.filename === convertPath)
-                    root.children.push({
-                        name: curPath,
-                        type: 'file',
-                        topic: curDoc['Dominant_Topic'],
-                        id: curDoc['id'],
-                        version: 'prev' 
-                    })
-                }
-            }     
-        })
-    }
-})
+        }     
+    })
+}
 
 function getVersions() {
     let vueDir = path.join(__dirname, '../data/vue-all-versions')
@@ -371,6 +378,10 @@ function getVersion (fileName) {
 function getRelPath (fileName) {
     let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
     return fileName.match(verReg)[2]
+  }
+function getFileName(filename){
+    let index = filename.lastIndexOf('\\')
+    return filename.substr(index+1)
 }
 
 // 获取指定版本范围后, 前后版本间的文件
