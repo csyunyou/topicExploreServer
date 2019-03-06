@@ -147,13 +147,13 @@ function readDirSync(rootPath, root, topicData, strv) {
 }
 
 function addPrevFile(rootPath, root, topicData){
-    var pa = fs.readdirSync(rootPath)
+    let pa = fs.readdirSync(rootPath)
     pa.forEach(function(ele, index) {
-        var curPath = path.resolve(rootPath, ele),
+        let curPath = path.resolve(rootPath, ele),
             info = fs.statSync(curPath)
-        var i=0
+        let i=0
         for(; i<root.children.length; i++) {
-            var dirName = root.children[i].name
+            let dirName = root.children[i].name
             dirName = dirName.substr(dirName.lastIndexOf('\\')+1)
             if(ele === dirName){
                 if(info.isDirectory())
@@ -167,8 +167,15 @@ function addPrevFile(rootPath, root, topicData){
             }     
         }
         if(i === root.children.length){
-            if(info.isDirectory())
-                readDirSync(curPath, root, topicData, 'prev')
+            if(info.isDirectory()) {
+                root.children.push({
+                    name: curPath, 
+                    children: [], 
+                    type: 'dir', 
+                    version: 'prev'
+                })
+                readDirSync(curPath, root.children[i], topicData, 'prev')
+            }
             else {
                 let convertPath=convertSlash(curPath)
                 curDoc = topicData.find(d => d.filename === convertPath)
