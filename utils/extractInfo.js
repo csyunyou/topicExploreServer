@@ -130,7 +130,7 @@ function write2Csv(res, fileName) {
     }, (err, data) => {
         // console.log(data)
         // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
-        fs.appendFileSync(`/Users/wendahuang/Desktop/data/vue-all.csv`, data);
+        fs.appendFileSync(`C:/Users/50809/Desktop/vue-all-versions/vue-all.csv`, data);
         console.log("finish writing:", fileName)
     })
 }
@@ -138,7 +138,7 @@ function write2Csv(res, fileName) {
 // extractFileInfo('../mock/commentId.js')
 
 function main() {
-    const vueSrc = '/Users/wendahuang/Desktop/vue-all-versions',
+    const vueSrc = 'C:/Users/50809/Desktop/vue-all-versions',
         files = fs.readdirSync(vueSrc)
     let fpath = null
     for (let i = 0, len = files.length; i < len; i++) {

@@ -385,7 +385,7 @@ function getVersion (fileName) {
 function getRelPath (fileName) {
     let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
     return fileName.match(verReg)[2]
-  }
+}
 function getFileName(filename){
     let index = filename.lastIndexOf('\\')
     return filename.substr(index+1)
