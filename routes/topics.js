@@ -9,7 +9,8 @@ var _ = require('lodash');
 
 const topicData = getTopicData(), fileData = getFileData(topicData.length),
     topicCluster = getTopicCluster(topicData, fileData),
-    dominantDocs = getDominantDocs(), normData = getNormOfDiffVecs(topicData, fileData)
+    dominantDocs = getDominantDocs(), normData = getNormOfDiffVecs(topicData, fileData),
+    editFileIds = getEditFileIds(fileData)
 
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
@@ -18,6 +19,10 @@ router.get('/getAllDocs', function (req, res, next) {
         versions: getVersions()
     })
 });
+
+router.get('/getEditFileIds', function(req, res, next){
+    res.send(editFileIds)
+})
 
 /**
  * @description 获取主题的关键词
@@ -69,7 +74,7 @@ router.get('/getNormOfDiffVecs', function(req, res, next){
 router.get('/getDiffDocs', function(req,res,next){
     let prev = req.query.prev,
         curv = req.query.curv
-    const diffDocs = getDiffDocs(prev, curv, fileData)
+    const diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
     res.send(diffDocs)
 })
 
@@ -96,7 +101,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
         let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
         addPrevFile(convertSlash(prevDir), root, prevFilteredTopicData)
 
-        var diffDocs = getDiffDocs(prev, curv, fileData)
+        var diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
         diffDocs.forEach(doc =>{
             let vec = doc.vec
             vec = vec.map(d => d*d)
@@ -392,24 +397,42 @@ function getFileName(filename){
 }
 
 // 获取指定版本范围后, 前后版本间的文件
-function getDiffDocs(prev, curv, fileData){
+function getDiffDocs(prev, curv, fileData, editFileIds){
     var prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
         curvDocs = fileData.filter(d => getVersion(d.filename) === curv)
     let addDocs = _.differenceBy(curvDocs, prevDocs, d => getRelPath(d['filename'])),
         delDocs = _.differenceBy(prevDocs, curvDocs, d => getRelPath(d['filename'])),
         editDocsObj = _.groupBy(prevDocs.concat(curvDocs), d => getRelPath(d['filename']))
     
-    var diffDocs = []
+    var diffDocs = [], delIds = []
     addDocs.forEach(doc => {
-        let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-        diffDocs.push({
-            fileName: [doc.filename],
-            vec: curvVec,
-            type: 'add',
-            fileIds: [doc.id],
-        })
+        let editIds = editFileIds.filter(ids => ids.curid.indexOf(parseInt(doc.id)) != -1)
+        if(editIds.length > 0){
+            let prevDoc = delDocs.filter(deldoc => editIds[0].preid.indexOf(parseInt(deldoc.id)) != -1)
+            if(prevDoc.length > 0){
+                let prevVec = prevDoc[0]['Topic_Contribution'].map(topic => topic['percent']),
+                    curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+                diffDocs.push({
+                    fileName: [prevDoc.filename, doc.filename],
+                    vec: curvVec.map((d,i) => d - prevVec[i]),
+                    type: 'edit',
+                    fileIds: [prevDoc.id, doc.id]
+                })
+                delIds.push(prevDoc.id)
+            }
+        }
+        else {
+            let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
+            diffDocs.push({
+                fileName: [doc.filename],
+                vec: curvVec,
+                type: 'add',
+                fileIds: [doc.id],
+            })
+        }
     })
-    delDocs.forEach(doc => {
+    delDocs.filter(doc => delIds.indexOf(doc.id) === -1)
+        .forEach(doc => {
         let prevVec = doc['Topic_Contribution'].map(topic => -topic['percent'])
         diffDocs.push({
             fileName: [doc.filename],
@@ -438,5 +461,31 @@ function getDiffDocs(prev, curv, fileData){
     })
     return diffDocs
 }
+
+function getEditFileIds(fileData){
+    let filepath = path.join(__dirname, '../data/deal-data/edit-fileids.csv')
+    const fpath = filepath.replace(/\\/g, '\\\\')
+
+    const text = fs.readFileSync(fpath, 'utf-8')
+    var fileIds = parse(text, {
+        columns: true
+    })
+    fileIds.forEach(d => {
+        let preDoc = fileData[parseInt(d.preid)], curDoc = fileData[parseInt(d.curid)]
+        let preIds = [parseInt(d.preid)], curIds = [parseInt(d.curid)]
+        for(let i=0; i<parseInt(d.preid); i++){
+            if(getRelPath(fileData[i].filename)===getRelPath(preDoc.filename))
+                preIds.push(i)
+        }
+        for(let i=parseInt(d.curid)+1; i<fileData.length; i++){
+            if(getRelPath(fileData[i].filename)===getRelPath(curDoc.filename))
+                curIds.push(i)
+        }
+        d.preid = preIds
+        d.curid = curIds
+    })
+    return fileIds
+}
+
 
 module.exports = router;
