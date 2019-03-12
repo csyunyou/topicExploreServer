@@ -9,8 +9,9 @@ var _ = require('lodash');
 
 const topicData = getTopicData(), fileData = getFileData(topicData.length),
     topicCluster = getTopicCluster(topicData, fileData),
-    dominantDocs = getDominantDocs(), normData = getNormOfDiffVecs(topicData, fileData),
-    editFileIds = getEditFileIds(fileData)
+    dominantDocs = getDominantDocs(), 
+    editFileIds = getEditFileIds(fileData),
+    normData = getNormOfDiffVecs(fileData, editFileIds)
 
 /* GET home page. */
 router.get('/getAllDocs', function (req, res, next) {
@@ -317,66 +318,24 @@ function getDominantDocs() {
 /**
  * @description 计算前后版本的主题向量差之模
  */
-function getNormOfDiffVecs(topicData, fileData) {
+function getNormOfDiffVecs(fileData, editFileIds) {
     var versions = getVersions()
-    var diffVecs = []
+    var prev = versions[0]
+    var norm = []
 
-    var prev = versions[0], 
-        curv,
-        prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
-        curvDocs
-    
-    // // 第一个版本的主题向量差为当前所有文件的主题向量和
-    // prevDocs.forEach(doc => {
-    //     let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-    //     diffVecs[0] = diffVecs[0].map((d, i) => d+curvVec[i])
-    // })
-
-    for(let i=1; i<versions.length; i++) {
-        curv = versions[i]
-        curvDocs = fileData.filter(d => getVersion(d.filename) === curv)
-        let addDocs = _.differenceBy(curvDocs, prevDocs, d => getRelPath(d['filename'])),
-            delDocs = _.differenceBy(prevDocs, curvDocs, d => getRelPath(d['filename'])),
-            editDocsObj = _.groupBy(prevDocs.concat(curvDocs), d => getRelPath(d['filename']))
-        
-        let diffVec = Array(topicData.length).fill(0)
-        // 增加文件的diffvec = curdocvec
-        addDocs.forEach(doc => {
-            let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-            diffVec = diffVec.map((d, i) => d+curvVec[i])
-        })
-        // 删除文件的diffvec = -predocvec
-        delDocs.forEach(doc => {
-            let prevVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-            diffVec = diffVec.map((d, i) => d-prevVec[i])
-        })
-        // 修改文件的diffvec = curdocvec-predocvec
-        Object.keys(editDocsObj).forEach(key => {
-            let preData, nextData, version
-            if(editDocsObj[key].length === 2){
-                for (let j = 0; j < editDocsObj[key].length; j++) {
-                    version = getVersion(editDocsObj[key][j].filename)
-                    if (version === prev) preData = editDocsObj[key][j]
-                    else nextData = editDocsObj[key][j]
-                }
-                let prevVec = preData['Topic_Contribution'].map(topic => topic['percent']),
-                    curvVec = nextData['Topic_Contribution'].map(topic => topic['percent'])
-                diffVec = diffVec.map((d,i) => d+(curvVec[i]-prevVec[i]))
-            }
-        })
-        diffVecs.push(diffVec)
-        prev = curv
-        prevDocs = curvDocs 
-    }
-    // 计算各个diffvec的模
-    var norm = [{ver: versions[0], val: 0}]
-    diffVecs.forEach((vec, i) => {
-        vec = vec.map(d => d*d)
-        norm.push({
-            ver: versions[i+1],
-            val: Math.sqrt(vec.reduce(getSum))
-        })
+    versions.forEach(d => {
+        norm.push({ver: d, val: 0})
     })
+    
+    for(let i=1; i<versions.length; i++) {
+        let curv = versions[i]
+        let diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
+        diffDocs.forEach(doc=>{
+            let vec = doc.vec.map(d => d*d)
+            norm[i].val = norm[i].val+Math.sqrt(vec.reduce(getSum))
+        })
+        prev = curv
+    }
     return norm
 }
 
@@ -416,9 +375,9 @@ function getDiffDocs(prev, curv, fileData, editFileIds){
                     fileName: [prevDoc.filename, doc.filename],
                     vec: curvVec.map((d,i) => d - prevVec[i]),
                     type: 'edit',
-                    fileIds: [prevDoc.id, doc.id]
+                    fileIds: [prevDoc[0].id, doc.id]
                 })
-                delIds.push(prevDoc.id)
+                delIds.push(prevDoc[0].id)
             }
         }
         else {
@@ -431,6 +390,7 @@ function getDiffDocs(prev, curv, fileData, editFileIds){
             })
         }
     })
+
     delDocs.filter(doc => delIds.indexOf(doc.id) === -1)
         .forEach(doc => {
         let prevVec = doc['Topic_Contribution'].map(topic => -topic['percent'])
