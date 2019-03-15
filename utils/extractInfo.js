@@ -14,73 +14,88 @@ function extractFileInfo(fpath) {
     let funcNum = 0
     const code = fs.readFileSync(fpath, 'utf-8'),
         fInfo = fs.statSync(fpath),
-        identifiers = [],
-        ast = babelParser.parse(code, {
-            // parse in strict mode and allow module declarations
-            sourceType: "module",
-            plugins: [
-                // enable jsx and flow syntax
-                "flow"
-            ]
-        }),
-        visitor = {
-            VariableDeclaration({ node }) {
-                let { declarations } = node
-                for (let i = 0, len = declarations.length; i < len; i++) {
-                    switch (declarations[i].id.type) {
-                        // 对象解构赋值
-                        case 'ObjectPattern':
-                            const props = declarations[i].id.properties
-                            props.forEach(({ key }) => {
-                                identifiers.push(key.name)
-                            })
-                            break;
-                        //  数组结构赋值
-                        case 'ArrayPattern':
-                            const elems = declarations[i].id.elements
-                            elems.forEach(({ name }) => {
-                                identifiers.push(name)
-                            })
-                            break;
-                        default:
-                            identifiers.push(declarations[i].id.name)
-                            break;
+        identifiers = []
+        try{
+            const ast = babelParser.parse(code, {
+                // parse in strict mode and allow module declarations
+                sourceType: "module",
+                plugins: [
+                    // enable jsx and flow syntax
+                    "flow"
+                ]
+            })
+            const visitor = {
+                VariableDeclaration({ node }) {
+                    let { declarations } = node
+                    for (let i = 0, len = declarations.length; i < len; i++) {
+                        switch (declarations[i].id.type) {
+                            // 对象解构赋值
+                            case 'ObjectPattern':
+                                const props = declarations[i].id.properties
+                                props.forEach(({ key }) => {
+                                    identifiers.push(key.name)
+                                })
+                                break;
+                            //  数组结构赋值
+                            case 'ArrayPattern':
+                                const elems = declarations[i].id.elements
+                                elems.forEach(({ name }) => {
+                                    identifiers.push(name)
+                                })
+                                break;
+                            default:
+                                identifiers.push(declarations[i].id.name)
+                                break;
+                        }
+                    }
+                },
+                FunctionDeclaration({ node }) {
+                    // 处理匿名函数
+                    funcNum++
+                    node.id && (identifiers.push(node.id.name))
+                },
+                ClassDeclaration({ node }) {
+                    identifiers.push(node.id.name)
+                },
+                ClassProperty({ node }) {
+                    identifiers.push(node.key.name)
+                },
+                ImportDeclaration({ node }) {
+                    const { specifiers } = node
+                    for (let i = 0, len = specifiers.length; i < len; i++) {
+                        identifiers.push(specifiers[i].local.name)
                     }
                 }
-            },
-            FunctionDeclaration({ node }) {
-                // 处理匿名函数
-                funcNum++
-                node.id && (identifiers.push(node.id.name))
-            },
-            ClassDeclaration({ node }) {
-                identifiers.push(node.id.name)
-            },
-            ClassProperty({ node }) {
-                identifiers.push(node.key.name)
-            },
-            ImportDeclaration({ node }) {
-                const { specifiers } = node
-                for (let i = 0, len = specifiers.length; i < len; i++) {
-                    identifiers.push(specifiers[i].local.name)
-                }
             }
+            const comments = ast.comments
+            babelTraverse(ast, visitor);
+            res.push({
+                identifiers: identifiers.map(formatIdentifier)
+                    .reduce((a, b) => a.concat(b), [])
+                    .join(' ')
+                    .toLocaleLowerCase(),
+                commentsArr: comments.map(d => d.value.toLowerCase()),
+                comments:comments.map(d => d.value).join(' ').toLocaleLowerCase(),
+                fileName: fpath,
+                size: fInfo.size,
+                funcNum
+            })
         }
-    const comments = ast.comments
-    // console.log(comments)
-    babelTraverse(ast, visitor);
+        catch(e){
+            console.log(fpath)
+            res.push({
+                identifiers: [],
+                commentsArr: [],
+                comments:'',
+                fileName: fpath,
+                size: fInfo.size,
+                funcNum
+            })
+            return
+        }
+    
     // console.log('identifiers:', identifiers, fpath)
-    res.push({
-        identifiers: identifiers.map(formatIdentifier)
-            .reduce((a, b) => a.concat(b), [])
-            .join(' ')
-            .toLocaleLowerCase(),
-        commentsArr: comments.map(d => d.value.toLowerCase()),
-        comments:comments.map(d => d.value).join(' ').toLocaleLowerCase(),
-        fileName: fpath,
-        size: fInfo.size,
-        funcNum
-    })
+   
 }
 
 /*
@@ -128,9 +143,8 @@ function write2Csv(res, fileName) {
     stringify(res, {
         // header: true
     }, (err, data) => {
-        // console.log(data)
         // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
-        fs.appendFileSync(`C:/Users/50809/Desktop/vue-all-versions/vue-all.csv`, data);
+        fs.appendFileSync(`C:/Users/50809/Desktop/d3/d3-all-versions/d3-all.csv`, data);
         console.log("finish writing:", fileName)
     })
 }
@@ -138,13 +152,12 @@ function write2Csv(res, fileName) {
 // extractFileInfo('../mock/commentId.js')
 
 function main() {
-    const vueSrc = 'C:/Users/50809/Desktop/vue-all-versions',
+    const vueSrc = 'C:/Users/50809/Desktop/d3/d3-all-versions',
         files = fs.readdirSync(vueSrc)
     let fpath = null
     for (let i = 0, len = files.length; i < len; i++) {
         fpath = path.resolve(vueSrc, files[i])
         let stat = fs.statSync(fpath)
-        // console.log(fpath)
         stat.isDirectory() && extractText(fpath)
     }
 }

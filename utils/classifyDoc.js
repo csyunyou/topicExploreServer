@@ -5,11 +5,11 @@ var parse = require('csv-parse/lib/sync');
 const stringify = require('csv-stringify');
 
 function getVersions() {
-    let vueDir = path.join(__dirname, '../data/vue-all-versions')
+    let vueDir = path.join(__dirname, '../data/d3-all-versions')
     const vueSrc = vueDir.replace(/\\/g, '\\\\')
     const files = fs.readdirSync(vueSrc)
     let fpath = null
-    let verReg = /vue-(\d*\.\d*\.\d*)/
+    let verReg = /d3-(\d*\.\d*\.\d*)/
     let versions = []
     for (let i = 0, len = files.length; i < len; i++) {
         fpath = path.resolve(vueSrc, files[i])
@@ -29,7 +29,7 @@ function getVersions() {
 }
 
 function getFileData() {
-    let filepath = path.join(__dirname, '../data/deal-data/vue-all-versions-topic.csv')
+    let filepath = path.join(__dirname, '../data/deal-data/d3-all-versions-topic.csv')
     const fpath = filepath.replace(/\\/g, '\\\\')
 
     const text = fs.readFileSync(fpath, 'utf-8')
@@ -40,15 +40,16 @@ function getFileData() {
         let filename = path.join(__dirname, '../data', doc['filename'])
         doc['filename'] = filename.replace(/\\/g, '\\\\')
     })
+    console.log(fileData[55])
     return fileData
 }
 
 function getVersion (fileName) {
-    let verReg = /vue-(\d*\.\d*\.\d*)/
+    let verReg = /d3-(\d*\.\d*\.\d*)/
     return fileName.match(verReg)[1]
 }
 function getRelPath (fileName) {
-    let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
+    let verReg = /d3-(\d*\.\d*\.\d*)(.*)/
     return fileName.match(verReg)[2]
 }
 
@@ -91,7 +92,7 @@ function write2Csv(res, fileName) {
     console.log('writing:', fileName)
     stringify(res, {
     }, (err, data) => {
-        fs.appendFileSync(`C:/Users/50809/Desktop/data/vue-all-diffDocs.csv`, data);
+        fs.appendFileSync(`C:/Users/50809/Desktop/d3/deal-data/d3-all-diffDocs.csv`, data);
         console.log("finish writing:", fileName)
     })
 }
