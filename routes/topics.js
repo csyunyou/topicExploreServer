@@ -6,10 +6,11 @@ var parse = require('csv-parse/lib/sync');
 var path = require('path');
 var hCluster = require('../utils/hCluster');
 var _ = require('lodash');
+var gitDiff = require('git-diff')
 
 const topicData = getTopicData(), fileData = getFileData(topicData.length),
     topicCluster = getTopicCluster(topicData, fileData),
-    dominantDocs = getDominantDocs(), 
+    // dominantDocs = getDominantDocs(), 
     editFileIds = getEditFileIds(fileData),
     normData = getNormOfDiffVecs(fileData, editFileIds)
 
@@ -36,11 +37,18 @@ router.get('/getTopicCluster', function (req, res, next) {
     res.send(topicCluster)
 })
 
-router.get('/getDominantDocsByTopic', function (req, res, next) {
-    const topicNum = parseInt(req.query.topicNum),
-        filteredDocs = dominantDocs.filter(d => parseInt(d['Dominant_Topic']) === topicNum)
-    res.send(filteredDocs)
-})
+// router.get('/getDominantDocsByTopic', function (req, res, next) {
+//     const topicNum = parseInt(req.query.topicNum),
+//         filteredDocs = dominantDocs.filter(d => parseInt(d['Dominant_Topic']) === topicNum)
+//     res.send(filteredDocs)
+// })
+
+// router.get('/getDiffLines', function(req, res, next){
+//     var oldStr = fs.readFileSync(req.query.filepath, 'utf-8')
+//     var newStr = ''
+//     var diff = gitDiff(oldStr, newStr)
+//     res.send(diff)
+// })
 
 /**
  * @description 获取源代码
@@ -247,7 +255,7 @@ function getFileData(topicNum) {
         doc['Perc_Contribution'] = Number(doc['Perc_Contribution'])
         doc['commentArr'] = JSON.parse(doc['commentArr'])
     })
-    return fileData
+    return fileData 
 }
 
 /**
@@ -302,18 +310,18 @@ function getTopicCluster(topicData, fileData) {
     return root
 }
 
-/**
- * @description 获得每个主题的代表文件
- */
-function getDominantDocs() {
-    let filepath = path.join(__dirname, '../data/deal-data/dominant-documents-per-topic.csv')
-    const fpath = filepath.replace(/\\/g, '\\\\')
+// /**
+//  * @description 获得每个主题的代表文件
+//  */
+// function getDominantDocs() {
+//     let filepath = path.join(__dirname, '../data/deal-data/dominant-documents-per-topic.csv')
+//     const fpath = filepath.replace(/\\/g, '\\\\')
 
-    const text = fs.readFileSync(fpath, 'utf-8')
-    return parse(text, {
-        columns: true
-    })
-}
+//     const text = fs.readFileSync(fpath, 'utf-8')
+//     return parse(text, {
+//         columns: true
+//     })
+// }
 
 /**
  * @description 计算前后版本的主题向量差之模
