@@ -30,7 +30,7 @@ router.get('/getEditFileIds', function(req, res, next){
  * @description 获取主题的关键词
  */
 router.get('/getTopicData', function (req, res, next) {
-    res.send(topicData)
+    res.send(topicData) 
 })
 
 router.get('/getTopicCluster', function (req, res, next) {
@@ -286,6 +286,22 @@ function getTopicData() {
             })
         })
         res.push(topic)
+    })
+    let wordDict = new Array();
+    res.forEach(topic => {
+        topic.keywords.forEach(d => {
+            if(!wordDict.hasOwnProperty(d.keyword))
+                wordDict[d.keyword] = 1
+            else
+                wordDict[d.keyword] += 1
+        })
+    })
+    let num = res.length
+    res.forEach(topic =>{
+        topic.keywords.forEach(d => {
+            d.weight = d.weight * Math.log(num/wordDict[d.keyword])
+            console.log(d.keyword, d.weight)
+        })
     })
     return res
 }
