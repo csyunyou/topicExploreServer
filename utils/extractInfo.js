@@ -60,15 +60,24 @@ function extractFileInfo(fpath) {
                 ClassProperty({ node }) {
                     identifiers.push(node.key.name)
                 },
-                // ImportDeclaration({ node }) {
-                //     const { specifiers } = node
-                //     for (let i = 0, len = specifiers.length; i < len; i++) {
-                //         identifiers.push(specifiers[i].local.name)
-                //     }
-                // }
+                ImportDeclaration({ node }) {
+                    const { specifiers } = node
+                    for (let i = 0, len = specifiers.length; i < len; i++) {
+                        identifiers.push(specifiers[i].local.name)
+                    }
+                },
+                AssignmentExpression({ node }){
+                    let left  = node.left
+                    if(left.property)
+                        left.property.name && identifiers.push(left.property.name)
+                    while(left.object && left.object.type === 'MemberExpression'){
+                        left.object.property && left.object.property.name && (identifiers.push(left.object.property.name))
+                        left = left.object
+                    }
+                }
             }
             const comments = ast.comments
-            babelTraverse(ast, visitor);
+            babelTraverse(ast, visitor)
             res.push({
                 identifiers: identifiers.map(formatIdentifier)
                     .reduce((a, b) => a.concat(b), [])
@@ -76,19 +85,22 @@ function extractFileInfo(fpath) {
                     .toLocaleLowerCase(),
                 commentsArr: comments.map(d => d.value.toLowerCase()),
                 comments:comments.map(d => d.value).join(' ').toLocaleLowerCase(),
-                fileName: getVersion(fpath.replace(/\\/g, '\\\\')),
+                fileName: fpath,
                 size: fInfo.size,
                 funcNum
+                // version: getVersion(fpath.replace(/\\/g, '\\\\'))
             })
         }
         catch(e){
+            console.log(fpath)
             res.push({
                 identifiers: [],
                 commentsArr: [],
                 comments:'',
-                fileName: getVersion(fpath.replace(/\\/g, '\\\\')),
+                fileName: fpath,
                 size: fInfo.size,
                 funcNum
+                // version: getVersion(fpath.replace(/\\/g, '\\\\')),
             })
             return
         }
@@ -98,8 +110,13 @@ function extractFileInfo(fpath) {
 }
 
 function getVersion (fileName) {
-    let verReg = /vue-(\d*\.\d*\.\d*)/
-    return fileName.match(verReg)[1]
+    let verReg = /d3-(\d*\.\d*\.\d*)/
+    if(fileName.match(verReg))
+        return fileName.match(verReg)[1]
+    else{
+        verReg = /d3-(\d*\.\d*)/
+        return fileName.match(verReg)[1]
+    }
 }
 
 /*
@@ -148,7 +165,7 @@ function write2Csv(res, fileName) {
         // header: true
     }, (err, data) => {
         // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
-        fs.appendFileSync(`C:/Users/50809/Desktop/vue/deal-data/vue-all.csv`, data);
+        fs.appendFileSync(`C:/Users/50809/Desktop/d3/d3-all.csv`, data);
         console.log("finish writing:", fileName)
     })
 }
@@ -156,7 +173,7 @@ function write2Csv(res, fileName) {
 // extractFileInfo('../mock/commentId.js')
 
 function main() {
-    const vueSrc = 'C:/Users/50809/Desktop/vue/vue-all-versions',
+    const vueSrc = 'C:/Users/50809/Desktop/d3/d3-all-versions',
         files = fs.readdirSync(vueSrc)
     let fpath = null
     for (let i = 0, len = files.length; i < len; i++) {
@@ -172,5 +189,4 @@ main()
 write2Csv(res) */
 
 // console.log(res)
-
-// extractInfo()
+// extractFileInfo('C:\\Users\\50809\\Desktop\\d3\\d3-all-versions\\d3-1.0.0\\src\\core\\selection.js')

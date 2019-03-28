@@ -40,7 +40,6 @@ function getFileData() {
         let filename = path.join(__dirname, '../data', doc['filename'])
         doc['filename'] = filename.replace(/\\/g, '\\\\')
     })
-    console.log(fileData[55])
     return fileData
 }
 
