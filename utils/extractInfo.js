@@ -1,16 +1,16 @@
 var path = require('path');
 var fs = require('fs');
-const extract = require('babel-extract-comments');
+// const extract = require('babel-extract-comments');
 const babelParser = require('babylon');
 const babelTraverse = require('@babel/traverse').default
 const stringify = require('csv-stringify')
-const blackList = ['.DS_Store']
-let res = []
+const blackList = ['.DS_Store','.html', '.map']
+let res = [], id = 0
 
 /*
 description: 提取文件中的注释和标识符
  */
-function extractFileInfo(fpath) {
+function extractFileInfo(fpath, lib) {
     let funcNum = 0
     const code = fs.readFileSync(fpath, 'utf-8'),
         fInfo = fs.statSync(fpath),
@@ -29,7 +29,7 @@ function extractFileInfo(fpath) {
                     let { declarations } = node
                     for (let i = 0, len = declarations.length; i < len; i++) {
                         switch (declarations[i].id.type) {
-                            // 对象解构赋值
+                            // 对象结构赋值
                             case 'ObjectPattern':
                                 const props = declarations[i].id.properties
                                 props.forEach(({ key }) => {
@@ -79,67 +79,63 @@ function extractFileInfo(fpath) {
             const comments = ast.comments
             babelTraverse(ast, visitor)
             res.push({
+                id: id,
                 identifiers: identifiers.map(formatIdentifier)
                     .reduce((a, b) => a.concat(b), [])
                     .join(' ')
                     .toLocaleLowerCase(),
                 commentsArr: comments.map(d => d.value.toLowerCase()),
                 comments:comments.map(d => d.value).join(' ').toLocaleLowerCase(),
-                fileName: fpath,
+                filename: fpath,
                 size: fInfo.size,
-                funcNum
-                // version: getVersion(fpath.replace(/\\/g, '\\\\'))
+                func: funcNum,
+                version: getVersion(fpath.replace(/\\/g, '\\\\'), lib)
             })
+            id++
         }
         catch(e){
             console.log(fpath)
             res.push({
+                id: id,
                 identifiers: [],
                 commentsArr: [],
                 comments:'',
-                fileName: fpath,
+                filename: fpath,
                 size: fInfo.size,
-                funcNum
-                // version: getVersion(fpath.replace(/\\/g, '\\\\')),
+                func: funcNum,
+                version: getVersion(fpath.replace(/\\/g, '\\\\'), lib),
             })
+            id++
             return
         }
-    
-    // console.log('identifiers:', identifiers, fpath)
-   
 }
 
-function getVersion (fileName) {
-    let verReg = /d3-(\d*\.\d*\.\d*)/
-    if(fileName.match(verReg))
-        return fileName.match(verReg)[1]
-    else{
-        verReg = /d3-(\d*\.\d*)/
-        return fileName.match(verReg)[1]
-    }
+function getVersion (filename, lib) {
+    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)")
+    return filename.match(verReg)[1]
 }
 
 /*
 @desc 获取该目录下所有文件的文字信息
  */
-function extractText(rootPath) {
+function extractText(rootPath, lib) {
     function traverseDir(dir) {
         const files = fs.readdirSync(dir)
         files.forEach(function (file, index) {
-            if (blackList.indexOf(file) !== -1) return
+            let suffix = file.substr(file.lastIndexOf('.'))
+            if (blackList.indexOf(suffix) !== -1) return
             var curPath = path.resolve(dir, file),
                 info = fs.statSync(curPath)
             if (info.isDirectory()) {
                 traverseDir(curPath);
             } else {
-                extractFileInfo(curPath)
+                extractFileInfo(curPath, lib)
             }
         })
     }
     res = []
     traverseDir(path.resolve(rootPath, 'src'))
-    const seg = rootPath.split('/'), dirName = seg[seg.length - 1]
-    write2Csv(res, dirName)
+    write2Csv(res, rootPath, lib)
 }
 
 /**
@@ -159,34 +155,41 @@ function formatIdentifier(id) {
 /*
 @desc 将对象转成csv格式并写入文件
  */
-function write2Csv(res, fileName) {
-    console.log('writing:', fileName)
+function write2Csv(res, filename, lib) {
+    console.log('writing:', filename)
+    //构造路径
+    let fpath = filename.substr(0, filename.lastIndexOf('\\'))
+    fpath = fpath.substr(0, fpath.lastIndexOf('\\'))
+    fpath.replace(/\\/g, '/')
+
     stringify(res, {
         // header: true
     }, (err, data) => {
-        // fs.writeFileSync(`/Users/wendahuang/Desktop/data/${fileName}.csv`, data)
-        fs.appendFileSync(`C:/Users/50809/Desktop/d3/d3-all.csv`, data);
-        console.log("finish writing:", fileName)
+        fs.appendFileSync(fpath+"/"+lib+"-all-original-text.csv", data);
+        console.log("finish writing:", filename)
     })
 }
 
-// extractFileInfo('../mock/commentId.js')
+function main(src, lib) {
+    const files = fs.readdirSync(src)
 
-function main() {
-    const vueSrc = 'C:/Users/50809/Desktop/d3/d3-all-versions',
-        files = fs.readdirSync(vueSrc)
+    //先排序版本
+    files.sort(function(a, b){
+        let arrA = getVersion(a, lib).split('.'),
+            arrB = getVersion(b, lib).split('.')
+        for(let i=0; i<arrA.length; i++){
+            if(parseInt(arrA[i]) > parseInt(arrB[i])) return 1
+            if(parseInt(arrA[i]) < parseInt(arrB[i])) return -1
+        }
+    })
+
     let fpath = null
     for (let i = 0, len = files.length; i < len; i++) {
-        fpath = path.resolve(vueSrc, files[i])
+        fpath = path.resolve(src, files[i])
         let stat = fs.statSync(fpath)
-        stat.isDirectory() && extractText(fpath)
+        stat.isDirectory() && extractText(fpath, lib)
     }
 }
-// console.log(path.resolve(__dirname,'../public/javascripts/draft.js'))
-main()
-// extractFileInfo(path.resolve(__dirname,'../public/javascripts/draft.js'))
-/* traverseDir(srcDir)
-write2Csv(res) */
 
-// console.log(res)
-// extractFileInfo('C:\\Users\\50809\\Desktop\\d3\\d3-all-versions\\d3-1.0.0\\src\\core\\selection.js')
+// 第一个参数是类库所在的文件夹，第二个参数是类库名
+main('C:/Users/50809/Desktop/vue/vue-all-versions', 'vue')

@@ -4,9 +4,9 @@ var fs = require('fs');
 var parse = require('csv-parse/lib/sync');
 var path = require('path');
 var _ = require('lodash');
+const blackList = ['.DS_Store','.html', '.map']
 
 const topicData = getTopicData(), fileData = getFileData(topicData.length),
-    topicCluster = getTopicCluster(topicData, fileData),
     editFileIds = getEditFileIds(fileData),
     normData = getNormOfDiffVecs(fileData, editFileIds)
 
@@ -27,10 +27,6 @@ router.get('/getEditFileIds', function(req, res, next){
  */
 router.get('/getTopicData', function (req, res, next) {
     res.send(topicData) 
-})
-
-router.get('/getTopicCluster', function (req, res, next) {
-    res.send(topicCluster)
 })
 
 /**
@@ -59,10 +55,10 @@ router.get('/getDiffDocs', function(req,res,next){
  * @description 根据版本号获取主题在文件中的分布
  */
 router.get('/getTopicDisByVersion', function (req, res, next) {
-    const verReg = /d3-(\d*\.\d*\.\d*)/
+    const verReg = /vue-(\d*\.\d*\.\d*)/
     const curv = req.query.curv,
         curvFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === curv)
-    let vueDir = path.join(__dirname, '../data/d3-all-versions', `d3-${curv}`, 'src')
+    let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${curv}`, 'src')
     let directory = vueDir.replace(/\\/g, '\\\\'),
         root = {
             name: vueDir,
@@ -75,7 +71,7 @@ router.get('/getTopicDisByVersion', function (req, res, next) {
     const prev = req.query.prev
     if(prev){
         prevFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === prev)
-        let prevDir = path.join(__dirname, '../data/d3-all-versions', `d3-${prev}`, 'src')
+        let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
         addPrevFile(convertSlash(prevDir), root, prevFilteredTopicData)
 
         var diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
@@ -100,6 +96,8 @@ function convertSlash(path){
 function readDirSync(rootPath, root, topicData, strv) {
     var pa = fs.readdirSync(rootPath);
     pa.forEach(function (ele, index) {
+        let suffix = ele.substr(ele.lastIndexOf('.'))
+        if (blackList.indexOf(suffix) !== -1) return
         var curPath = path.resolve(rootPath, ele),
             info = fs.statSync(curPath)
         if (info.isDirectory()) {
@@ -126,6 +124,8 @@ function readDirSync(rootPath, root, topicData, strv) {
 function addPrevFile(rootPath, root, topicData){
     let pa = fs.readdirSync(rootPath)
     pa.forEach(function(ele, index) {
+        let suffix = ele.substr(ele.lastIndexOf('.'))
+        if (blackList.indexOf(suffix) !== -1) return
         let curPath = path.resolve(rootPath, ele),
             info = fs.statSync(curPath)
         let i=0
@@ -169,11 +169,11 @@ function addPrevFile(rootPath, root, topicData){
 }
 
 function getVersions() {
-    let vueDir = path.join(__dirname, '../data/d3-all-versions')
+    let vueDir = path.join(__dirname, '../data/vue-all-versions')
     const vueSrc = vueDir.replace(/\\/g, '\\\\')
     const files = fs.readdirSync(vueSrc)
     let fpath = null
-    let verReg = /d3-(\d*\.\d*\.\d*)/
+    let verReg = /vue-(\d*\.\d*\.\d*)/
     let versions = []
     for (let i = 0, len = files.length; i < len; i++) {
         fpath = path.resolve(vueSrc, files[i])
@@ -193,15 +193,15 @@ function getVersions() {
 }
 
 function getFileData(topicNum) {
-    let filepath = path.join(__dirname, '../data/deal-data/d3-all-versions-topic.csv')
+    let filepath = path.join(__dirname, '../data/deal-data/vue-all-versions-topic.csv')
     const fpath = filepath.replace(/\\/g, '\\\\')
 
     const text = fs.readFileSync(fpath, 'utf-8')
-    let tmpTopicCon = [], tmpTopicConItem
+    let tmpTopicConItem
     let fileData = parse(text, {
         columns: true
     })
-    // 用0来补充缺失值
+    // 用0来补充缺失的topic percent
     fileData.forEach(doc => {
         let filename = path.join(__dirname, '../data', doc['filename'])
         doc['filename'] = filename.replace(/\\/g, '\\\\')
@@ -222,10 +222,10 @@ function getFileData(topicNum) {
 }
 
 /**
- * @description 格式化topic数据
+ * @description 格式化topic数据
  */
 function getTopicData() {
-    let filepath = path.join(__dirname, '../data/deal-data/d3-topic.csv')
+    let filepath = path.join(__dirname, '../data/deal-data/vue-topic.csv')
     const fpath = filepath.replace(/\\/g, '\\\\')
 
     const text = fs.readFileSync(fpath, 'utf-8')
@@ -250,6 +250,8 @@ function getTopicData() {
         })
         res.push(topic)
     })
+
+    // td-idf 词云关键字重新赋权重
     let wordDict = new Array();
     res.forEach(topic => {
         topic.keywords.forEach(d => {
@@ -262,31 +264,11 @@ function getTopicData() {
     let num = res.length
     res.forEach(topic =>{
         topic.keywords.forEach(d => {
+            //weight作为tf, 在主题中出现的次数计算idf
             d.weight = d.weight * Math.log(num/wordDict[d.keyword])
-            console.log(d.keyword, d.weight)
         })
     })
     return res
-}
-
-/**
- * @description 返回树状结构组织的聚类结果
- * @param {Array} topicData 
- * @param {Array} fileData 
- */
-function getTopicCluster(topicData, fileData) {
-    const root = hCluster(topicData)
-    function dfs(root) {
-        if (!root.children) {
-            root.size = fileData.filter(d => parseInt(d['Dominant_Topic']) === root.index[0]).length
-            return
-        }
-        root.children.forEach(child => {
-            dfs(child)
-        })
-    }
-    dfs(root)
-    return root
 }
 
 /**
@@ -317,11 +299,11 @@ function getSum(total, num){
     return total+num
 }
 function getVersion (fileName) {
-    let verReg = /d3-(\d*\.\d*\.\d*)/
+    let verReg = /vue-(\d*\.\d*\.\d*)/
     return fileName.match(verReg)[1]
 }
 function getRelPath (fileName) {
-    let verReg = /d3-(\d*\.\d*\.\d*)(.*)/
+    let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
     return fileName.match(verReg)[2]
 }
 
