@@ -11,13 +11,13 @@ const blackList = ['.DS_Store','.html', '.map']
 var libData= {
     vue: {
         name: 'vue',
-        dirpath: 'C:/Users/50809/Desktop/vue',
-        srcPath: 'C:/Users/50809/Desktop/vue/vue-all-versions',
-        infoPath: 'C:/Users/50809/Desktop/vue/all-original-text.csv',
-        diffPath: 'C:/Users/50809/Desktop/vue/diffIds.csv',
-        editPath: 'C:/Users/50809/Desktop/vue/editIds.csv',
-        topicWordsPath: 'C:/Users/50809/Desktop/vue/topic_words.csv',
-        docTopicsPath: 'C:/Users/50809/Desktop/vue/doc_topics.csv',
+        dirpath: '../Data/vue',
+        srcPath: '../Data/vue/vue-all-versions',
+        infoPath: '../Data/vue/all-original-text.csv',
+        diffPath: '../Data/vue/diffIds.csv',
+        editPath: '../Data/vue/editIds.csv',
+        topicWordsPath: '../Data/vue/topic_words.csv',
+        docTopicsPath: '../Data/vue/doc_topics.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -29,13 +29,13 @@ var libData= {
     },
     d3: {
         name: 'd3',
-        dirpath: 'C:/Users/50809/Desktop/d3',
-        srcPath: 'C:/Users/50809/Desktop/d3/d3-all-versions',
-        infoPath: 'C:/Users/50809/Desktop/d3/all-original-text.csv',
-        diffPath: 'C:/Users/50809/Desktop/d3/diffIds.csv',
-        editPath: 'C:/Users/50809/Desktop/d3/editIds.csv',
-        topicWordsPath: 'C:/Users/50809/Desktop/d3/topic_words.csv',
-        docTopicsPath: 'C:/Users/50809/Desktop/d3/doc_topics.csv',
+        dirpath: '../Data/d3',
+        srcPath: '../Data/d3/d3-all-versions',
+        infoPath: '../Data/d3/all-original-text.csv',
+        diffPath: '../Data/d3/diffIds.csv',
+        editPath: '../Data/d3/editIds.csv',
+        topicWordsPath: '../Data/d3/topic_words.csv',
+        docTopicsPath: '../Data/d3/doc_topics.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -43,20 +43,26 @@ var libData= {
         versions: null,
         editIds: null,
         diffIds: null,
-        normData: null
+        normData: null,
+        curNormData: null
     }
 }
 
-var topicData, fileData, versions, normData
-preprocess('vue')
+var lib, topicData, fileData, versions, editIds, normData, curNormData
 
 /* GET home page. */
 router.get('/getLibName', function (req, res, next) {
     lib = req.query.libName
+    preprocess(lib)
+
     topicData = libData[lib].topicData
     fileData = libData[lib].fileData
     versions = libData[lib].versions
+    editIds = libData[lib].editIds
     normData = libData[lib].normData
+    docTopics = libData[lib].docTopics
+    curNormData = libData[lib].curNormData
+
     res.send({'flag': true})
 })
 
@@ -68,6 +74,10 @@ router.get('/getAllDocs', function (req, res, next) {
     })
 });
 
+router.get('/getNormData', function(req, res, next){
+    res.send(curNormData)
+})
+
 // 获取主题关键词
 router.get('/getTopicData', function (req, res, next) {
     res.send(topicData) 
@@ -78,26 +88,72 @@ router.get('/getNormOfDiffVecs', function(req, res, next){
     res.send(normData)
 })
 
+//获取文件-主题矩阵
+router.get('/getDocTopics', function(req, res, next){
+    res.send(docTopics)
+})
+
+// 获取文件结构
+router.get('/getFileHierarchyByVersion', function (req, res, next) {
+    const version = req.query.version,
+        curFileData = fileData.filter(d => d.version === version)
+    let vueDir = path.join(libData[lib].srcPath, `${lib}-${version}`, 'src')
+    let directory = vueDir.replace(/\\/g, '\\\\')
+    let root = {
+            name: vueDir,
+            type: 'dir',
+            children: []
+        }
+    readFileHierarchy(directory, root, curFileData, version) 
+    res.send(root)
+})
+
+// 获取两个版本间的差异文件
+router.get('/getDiffDocs', function(req,res,next){
+    let prev = req.query.prev,
+        curv = req.query.curv
+    var diffDocs = getDiffDocs(prev, curv, editIds, fileData)
+    res.send(diffDocs)
+})
+
+// 获取文件源码
+router.get('/getCode', function (req, res, next) {
+    var text = fs.readFileSync(req.query.filename, 'utf-8')
+    res.send(text)
+})
+
 /**
  * @description 后台预处理数据
  */
 function preprocess(lib){
     // topic-word数据
     libData[lib].topicWords = readTopicWords(libData[lib].topicWordsPath)
+    console.log('topic-word finish')
     // doc-topic数据
     libData[lib].docTopics = readDocTopics(libData[lib].docTopicsPath)
+    console.log('doc-topic finish')
     // 单词重新赋权重
     libData[lib].topicData = getTopicData(libData[lib].topicWords)
+    console.log('new-topic-word finish')
     // 文件数据
     libData[lib].fileData = getFileData(libData[lib].infoPath, libData[lib].docTopics)
+    console.log('all-file-data finish')
     // 版本号
     libData[lib].versions = getVersions(lib, libData[lib].srcPath) 
+    console.log('all-version finish')
     // 编辑文件
     libData[lib].editIds = readEditIds(libData[lib].editPath)
+    console.log('edit-file finish')
     // 差异文件
     libData[lib].diffIds = readDiffIds(libData[lib].diffPath) 
+    console.log('diff-file finish')
     // 版本向量差模
     libData[lib].normData = getNormOfDiffVecs(libData[lib].versions, libData[lib].diffIds, libData[lib].editIds, libData[lib].docTopics)
+    console.log('diff-vec finish')
+    //文件向量模
+    libData[lib].curNormData = getNormData(libData[lib].docTopics)
+    console.log('norm-data finish')
+
     console.log(lib+' data preprocess finish')
 }
 
@@ -230,6 +286,10 @@ function readEditIds(fpath){
     let editIds = parse(text, {
         columns: header
     })
+    editIds.forEach(d =>{
+        d['preid'] = parseInt(d['preid'])
+        d['curid'] = parseInt(d['curid'])
+    })
     return editIds
 }
 
@@ -241,6 +301,9 @@ function readDiffIds(fpath){
     let header = ['id', 'type', 'version']
     let diffIds = parse(text, {
         columns: header
+    })
+    diffIds.forEach(d =>{
+        d['id'] = parseInt(d['id'])
     })
     return diffIds
 }
@@ -263,22 +326,22 @@ function getNormOfDiffVecs(versions, diffIds, editIds, docTopics) {
         // 增加文件
         diffIds.forEach(item =>{
             if(item.version === curv && item.type === 'add'){
-                let diffvec = docTopics[parseInt(item.id)]
+                let diffvec = docTopics[item.id]
                 norm[i].val += getNorm(diffvec)
             }
         })
         // 删除文件
         diffIds.forEach(item =>{
             if(item.version === curv && item.type === 'del'){
-                let diffvec = docTopics[parseInt(item.id)].map(x => -x)
+                let diffvec = docTopics[item.id].map(x => -x)
                 norm[i].val += getNorm(diffvec)
             }
         })
         // 修改文件
         editIds.forEach(item =>{
             if(item.version === curv){
-                let prevec = docTopics[parseInt(item.preid)],
-                    curvec = docTopics[parseInt(item.curid)]
+                let prevec = docTopics[item.preid],
+                    curvec = docTopics[item.curid]
                 let diffvec = curvec.map((x, i) => x-prevec[i])
                 norm[i].val += getNorm(diffvec)
             }
@@ -295,256 +358,162 @@ function getNorm(vec){
     return Math.sqrt(sum)
 }
 
+/**
+ * @description 获取文件向量的模长
+ */
+function getNormData(docTopics){
+    var norm = []
+    var sum = 0
+    for(let i = 0; i < docTopics.length; i++){
+        let vec = docTopics[i]
+        norm.push(getNorm(vec))
+    }
+    return norm;
+}
 
-// const topicData = getTopicData(), fileData = getFileData(topicData.length),
-//     editFileIds = getEditFileIds(fileData),
-//     normData = getNormOfDiffVecs(fileData, editFileIds)
+/**
+ * @description 读取文件结构
+ */
+function topicCompare(a, b){
+    if(a.type < b.type){
+        return -1;
+    }
+    else if(a.type > b.type){
+        return 1;
+    }
+    if(a.type == 'topic' && b.type == 'topic'){
+        return a.id > b.id;
+    }
+    if(a.type == 'dir' && b.type == 'dir'){
+        return a.name > b.name;
+    }
+}
+function readFileHierarchy(rootPath, root, fileData, version) {
+    var pa = fs.readdirSync(rootPath);
+    pa.forEach(function (ele, index) {
+        // 判断是否是黑名单
+        let suffix = ele.substr(ele.lastIndexOf('.'))
+        if (blackList.indexOf(suffix) !== -1) return
+        
+        var curPath = path.resolve(rootPath, ele),
+            info = fs.statSync(curPath)
+        let convertPath = curPath.replace(/\\/g, '\\\\')
+        if (info.isDirectory()) {
+            let tmpdir = { name: convertPath, children: [], type: 'dir', version: version }
+            root.children.push(tmpdir)
+            readFileHierarchy(curPath, tmpdir, fileData, version);
+        } else {
+            let curDoc = fileData.find(d => d.filename === convertPath)
+            if(curDoc===undefined){
+                return
+            }
+            var file_type = '';           
+            var flag = false;
+            for(let i = 0; i < root.children.length; i++){
+                if(root.children[i].type == 'topic' && root.children[i].id == curDoc['main_topic']){
+                    flag = true;
+                    root.children[i].children.push({
+                        filename: convertPath,
+                        type: 'file',
+                        topic: curDoc['main_topic'],
+                        id: curDoc['id'],
+                        version: version,
+                        filetype: file_type
+                    })
+                    break;
+                }               
+            }
+            if(!flag){
+                root.children.push({
+                    type: 'topic',
+                    id: curDoc['main_topic'],
+                    children: [],
+                    name: convertPath + '\\' + String(curDoc['main_topic'])
+                })
+                root.children[root.children.length - 1].children.push({
+                    filename: convertPath,
+                    type: 'file',
+                    topic: curDoc['main_topic'],
+                    id: curDoc['id'],
+                    version: version,
+                    filetype: file_type
+                })
+                // console.log(root.children[root.children.length - 1]);
+            }                    
+        }
+        root.children = root.children.sort(topicCompare); 
+    })
+}
 
+/**
+ * @description 读取文件结构
+ */
+function getDiffDocs(prev, curv, editIds, fileData){
+    var prevDocs = fileData.filter(d => d.version === prev),
+        curvDocs = fileData.filter(d => d.version === curv)
 
-
-// router.get('/getEditFileIds', function(req, res, next){
-//     res.send(editFileIds)
-// })
-
-
-
-// /**
-//  * @description 获取源代码
-//  */
-// router.get('/getCode', function (req, res, next) {
-//     var text = fs.readFileSync(req.query.filepath, 'utf-8')
-//     res.send(text)
-// })
-
-// router.get('/getDiffDocs', function(req,res,next){
-//     let prev = req.query.prev,
-//         curv = req.query.curv
-//     const diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
-//     res.send(diffDocs)
-// })
-
-// /**
-//  * @description 根据版本号获取主题在文件中的分布
-//  */
-// router.get('/getTopicDisByVersion', function (req, res, next) {
-//     const verReg = /vue-(\d*\.\d*\.\d*)/
-//     const curv = req.query.curv,
-//         curvFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === curv)
-//     let vueDir = path.join(__dirname, '../data/vue-all-versions', `vue-${curv}`, 'src')
-//     let directory = vueDir.replace(/\\/g, '\\\\'),
-//         root = {
-//             name: vueDir,
-//             type: 'dir',
-//             children: []
-//         }
-//     readDirSync(directory, root, curvFilteredTopicData, 'curv') 
+    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)(.*)")
+    let addDocs = _.differenceBy(curvDocs, prevDocs, d => d['filename'].match(verReg)[2]),
+        delDocs = _.differenceBy(prevDocs, curvDocs, d => d['filename'].match(verReg)[2]),
+        editDocs = _.groupBy(prevDocs.concat(curvDocs), d => d['filename'].match(verReg)[2])
     
-//     // 增加上一版本的文件
-//     const prev = req.query.prev
-//     if(prev){
-//         prevFilteredTopicData = fileData.filter(d => d.filename.match(verReg)[1] === prev)
-//         let prevDir = path.join(__dirname, '../data/vue-all-versions', `vue-${prev}`, 'src')
-//         addPrevFile(convertSlash(prevDir), root, prevFilteredTopicData)
+    var addIds_ = [], delIds_ = [], editIds_ = []
+    addDocs.forEach(doc => {
+        // 查找是否有属于edit的增加文件(首先保证编辑文件中id是一对一的)
+        let edit_in_add = editIds.filter(d => d.curid === doc.id), preid = -1
+        if(edit_in_add.length > 0){
+            // 当前版本与前一版本对应的编辑文件id
+            preid = edit_in_add[0].preid
+            for(let i=versions.indexOf(curv)-1; i> versions.indexOf(prev); i--){
+                // 继续往前一版本查找
+                let preid_ = editIds.filter(d => d.version === versions[i] && d.curid === preid)
+                if(preid_.length > 0){
+                    preid = preid_.preid
+                }
+                else{
+                    addIds_.push(doc.id)
+                    break
+                }
+            }
+            if(preid != -1){
+                editIds_.push([preid, doc.id, 'm'])
+            } 
+        }
+        addIds_.push(doc.id)
+    })
 
-//         var diffDocs = getDiffDocs(prev, curv, fileData, editFileIds)
-//         diffDocs.forEach(doc =>{
-//             let vec = doc.vec
-//             vec = vec.map(d => d*d)
-//             let norm = Math.sqrt(vec.reduce(getSum))
-//             doc['norm'] = norm
-//         })
-//         res.send({root: root, diffDocs: diffDocs})
-//     }
-//     else
-//         res.send(root) 
-// })
+    delDocs.forEach(doc => {
+        // 查找是否有属于edit的删除文件(首先保证编辑文件中id是一对一的)
+        let edit_in_del = editIds.filter(d => d.preid === doc.id), curid = -1
+        if(edit_in_del.length > 0){
+            // 当前版本与后一版本对应的编辑文件id
+            curid = edit_in_del[0].curid
+            for(let i=versions.indexOf(prev)+2; i<=versions.indexOf(curv); i++){
+                // 继续往前一版本查找
+                let curid_ = editIds.filter(d => d.version === versions[i] && d.preid === curid)
+                if(curid_.length > 0){
+                    curid = curid_.curid
+                }
+                else{
+                    delIds_.push(doc.id)
+                    break
+                }
+            }
+            if(curid != -1) {
+                editIds_.push([doc.id, curid, 'm'])
+            }
+        }
+        delIds_.push(doc.id)
+    })
 
-// function convertSlash(path){
-//     let slashReg=/\\/g
-//     return path.replace(slashReg,'\\\\')
-// }
+    Object.keys(editDocs).forEach(key => {
+        if(editDocs[key].length === 2){
+            let item = editDocs[key]
+            editIds_.push([item[0].id, item[1].id])
+        }  
+    })
 
-// // 读取文件夹下的子文件
-// function readDirSync(rootPath, root, topicData, strv) {
-//     var pa = fs.readdirSync(rootPath);
-//     pa.forEach(function (ele, index) {
-//         let suffix = ele.substr(ele.lastIndexOf('.'))
-//         if (blackList.indexOf(suffix) !== -1) return
-//         var curPath = path.resolve(rootPath, ele),
-//             info = fs.statSync(curPath)
-//         if (info.isDirectory()) {
-//             let tmpdir = { name: curPath, children: [], type: 'dir', version: strv }
-//             root.children.push(tmpdir)
-//             readDirSync(curPath, tmpdir, topicData, strv);
-//         } else {
-//             let convertPath=convertSlash(curPath)
-//             let curDoc = topicData.find(d => d.filename === convertPath)
-//             if(curDoc===undefined){
-//                 return
-//             }
-//             root.children.push({
-//                 name: curPath,
-//                 type: 'file',
-//                 topic: curDoc['Dominant_Topic'],
-//                 id: curDoc['id'],
-//                 version: strv 
-//             })
-//         }
-//     })
-// }
-
-// function addPrevFile(rootPath, root, topicData){
-//     let pa = fs.readdirSync(rootPath)
-//     pa.forEach(function(ele, index) {
-//         let suffix = ele.substr(ele.lastIndexOf('.'))
-//         if (blackList.indexOf(suffix) !== -1) return
-//         let curPath = path.resolve(rootPath, ele),
-//             info = fs.statSync(curPath)
-//         let i=0
-//         for(; i<root.children.length; i++) {
-//             let dirName = root.children[i].name
-//             dirName = dirName.substr(dirName.lastIndexOf('\\')+1)
-//             if(ele === dirName){
-//                 if(info.isDirectory())
-//                     addPrevFile(curPath, root.children[i], topicData)
-//                 else{
-//                     let convertPath=convertSlash(curPath)
-//                     curDoc = topicData.find(d => d.filename === convertPath)
-//                     root.children[i]['preId'] = curDoc['id']
-//                 }
-//                 break
-//             }     
-//         }
-//         if(i === root.children.length){
-//             if(info.isDirectory()) {
-//                 root.children.push({
-//                     name: curPath, 
-//                     children: [], 
-//                     type: 'dir', 
-//                     version: 'prev'
-//                 })
-//                 readDirSync(curPath, root.children[i], topicData, 'prev')
-//             }
-//             else {
-//                 let convertPath=convertSlash(curPath)
-//                 curDoc = topicData.find(d => d.filename === convertPath)
-//                 root.children.push({
-//                     name: curPath,
-//                     type: 'file',
-//                     topic: curDoc['Dominant_Topic'],
-//                     id: curDoc['id'],
-//                     version: 'prev' 
-//                 })
-//             }
-//         }     
-//     })
-// }
-
-
-
-
-// function getSum(total, num){
-//     return total+num
-// }
-// function getVersion (fileName) {
-//     let verReg = /vue-(\d*\.\d*\.\d*)/
-//     return fileName.match(verReg)[1]
-// }
-// function getRelPath (fileName) {
-//     let verReg = /vue-(\d*\.\d*\.\d*)(.*)/
-//     return fileName.match(verReg)[2]
-// }
-
-// // 获取指定版本范围后, 前后版本间的文件
-// function getDiffDocs(prev, curv, fileData, editFileIds){
-//     var prevDocs = fileData.filter(d => getVersion(d.filename) === prev),
-//         curvDocs = fileData.filter(d => getVersion(d.filename) === curv)
-//     let addDocs = _.differenceBy(curvDocs, prevDocs, d => getRelPath(d['filename'])),
-//         delDocs = _.differenceBy(prevDocs, curvDocs, d => getRelPath(d['filename'])),
-//         editDocsObj = _.groupBy(prevDocs.concat(curvDocs), d => getRelPath(d['filename']))
-    
-//     var diffDocs = [], delIds = []
-//     addDocs.forEach(doc => {
-//         let editIds = editFileIds.filter(ids => ids.curid.indexOf(parseInt(doc.id)) != -1)
-//         if(editIds.length > 0){
-//             let prevDoc = delDocs.filter(deldoc => editIds[0].preid.indexOf(parseInt(deldoc.id)) != -1)
-//             if(prevDoc.length > 0){
-//                 let prevVec = prevDoc[0]['Topic_Contribution'].map(topic => topic['percent']),
-//                     curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-//                 diffDocs.push({
-//                     fileName: [prevDoc.filename, doc.filename],
-//                     vec: curvVec.map((d,i) => d - prevVec[i]),
-//                     type: 'edit',
-//                     fileIds: [prevDoc[0].id, doc.id]
-//                 })
-//                 delIds.push(prevDoc[0].id)
-//             }
-//         }
-//         else {
-//             let curvVec = doc['Topic_Contribution'].map(topic => topic['percent'])
-//             diffDocs.push({
-//                 fileName: [doc.filename],
-//                 vec: curvVec,
-//                 type: 'add',
-//                 fileIds: [doc.id],
-//             })
-//         }
-//     })
-
-//     delDocs.filter(doc => delIds.indexOf(doc.id) === -1)
-//         .forEach(doc => {
-//         let prevVec = doc['Topic_Contribution'].map(topic => -topic['percent'])
-//         diffDocs.push({
-//             fileName: [doc.filename],
-//             vec: prevVec,
-//             type: 'del',
-//             fileIds: [doc.id]
-//         })
-//     })
-//     Object.keys(editDocsObj).forEach(key => {
-//         let preData, nextData, version
-//         if(editDocsObj[key].length === 2){
-//             for (let j = 0; j < editDocsObj[key].length; j++) {
-//                 version = getVersion(editDocsObj[key][j].filename)
-//                 if (version === prev) preData = editDocsObj[key][j]
-//                 else nextData = editDocsObj[key][j]
-//             }
-//             let prevVec = preData['Topic_Contribution'].map(topic => topic['percent']),
-//                 curvVec = nextData['Topic_Contribution'].map(topic => topic['percent'])
-//             diffDocs.push({
-//                 fileName: [preData.filename, nextData.filename],
-//                 vec: curvVec.map((d,i) => d - prevVec[i]),
-//                 type: 'edit',
-//                 fileIds: [preData.id, nextData.id]
-//             })
-//         }
-//     })
-//     return diffDocs
-// }
-
-// function getEditFileIds(fileData){
-//     let filepath = path.join(__dirname, '../data/deal-data/edit-fileids.csv')
-//     const fpath = filepath.replace(/\\/g, '\\\\')
-
-//     const text = fs.readFileSync(fpath, 'utf-8')
-//     var fileIds = parse(text, {
-//         columns: true
-//     })
-//     fileIds.forEach(d => {
-//         let preDoc = fileData[parseInt(d.preid)], curDoc = fileData[parseInt(d.curid)]
-//         let preIds = [parseInt(d.preid)], curIds = [parseInt(d.curid)]
-//         for(let i=0; i<parseInt(d.preid); i++){
-//             if(getRelPath(fileData[i].filename)===getRelPath(preDoc.filename))
-//                 preIds.push(i)
-//         }
-//         for(let i=parseInt(d.curid)+1; i<fileData.length; i++){
-//             if(getRelPath(fileData[i].filename)===getRelPath(curDoc.filename))
-//                 curIds.push(i)
-//         }
-//         d.preid = preIds
-//         d.curid = curIds
-//     })
-//     return fileIds
-// }
+    return {'add': addIds_, 'del': delIds_, 'edit': editIds_}
+}
 
 module.exports = router;
