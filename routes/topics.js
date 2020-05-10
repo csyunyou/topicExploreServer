@@ -230,24 +230,33 @@ function getFileData(fpath, docTopics) {
     let fileData = parse(text, {
         columns: header
     })
-    // 用0来补充缺失的topic percent
+   
     fileData.forEach(doc => {
+        // 删除不需要的字段
+        delete doc.identifiers
+        delete doc.commentsArr
+        delete doc.comments
+        delete doc.size
+        delete doc.fun_num
+
         doc['id'] = parseInt(doc['id'])
         doc['filename'] = doc['filename'].replace(/\\/g, '\\\\')
+
         // 重新构造doc-topic矩阵
-        topicWeights = docTopics[doc['id']]
-        let id = 0, newTopicWeights = []
-        topicWeights.forEach(d =>{
-            newTopicWeights.push({'topic_id': id, 'weight': d})
+        let topicProbs = docTopics[doc['id']]     
+        let id = 0, newTopicProbs = []
+        topicProbs.forEach(d =>{
+            // weight表示文档在每个主题上的概率
+            newTopicProbs.push({'topic_id': id, 'weight': d})
             id++
         })
-        // 对权重排序
-        newTopicWeights.sort(function(a, b){
+        newTopicProbs.sort(function(a, b){
             return b.weight - a.weight
         })
-        doc['main_topic'] = newTopicWeights[0]['topic_id']
-        doc['main_weight'] = newTopicWeights[0]['weight']
-        doc['topicDistribution'] = newTopicWeights 
+
+        doc['main_topic'] = newTopicProbs[0]['topic_id']
+        doc['main_weight'] = newTopicProbs[0]['weight']
+        doc['topicDistribution'] = newTopicProbs 
     })
     return fileData 
 }
