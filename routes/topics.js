@@ -97,14 +97,18 @@ router.get('/getDocTopics', function(req, res, next){
 router.get('/getFileHierarchyByVersion', function (req, res, next) {
     const version = req.query.version,
         curFileData = fileData.filter(d => d.version === version)
-    let vueDir = path.join(libData[lib].srcPath, `${lib}-${version}`, 'src')
-    let directory = vueDir.replace(/\\/g, '\\\\')
+    
+    // join路径之后, '/'变成'\'
+    let libDir = path.join(libData[lib].srcPath, `${lib}-${version}`, 'src')
+    let directory = libDir.replace(/\\/g, '/')
+
     let root = {
-            name: vueDir,
+            name: libDir,
             type: 'dir',
             children: []
         }
     readFileHierarchy(directory, root, curFileData, version) 
+    addTopicNodes(root)
     res.send(root)
 })
 
@@ -240,7 +244,7 @@ function getFileData(fpath, docTopics) {
         delete doc.fun_num
 
         doc['id'] = parseInt(doc['id'])
-        doc['filename'] = doc['filename'].replace(/\\/g, '\\\\')
+        doc['filename'] = doc['filename'].replace(/\\/g, '/')
 
         // 重新构造doc-topic矩阵
         let topicProbs = docTopics[doc['id']]     
@@ -266,10 +270,11 @@ function getFileData(fpath, docTopics) {
  */
 function getVersions(lib, src) {
     const files = fs.readdirSync(src)
-    let fpath = null
-    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)")
-    let versions = []
+    let fpath = null,
+        verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)"),
+        versions = []
     for (let i = 0; i < files.length; i++) {
+        // resolve路径之后得到绝对路径'\'
         fpath = path.resolve(src, files[i])
         let stat = fs.statSync(fpath)
         stat.isDirectory() && (versions.push(fpath.match(verReg)[1]))
@@ -383,20 +388,6 @@ function getNormData(docTopics){
 /**
  * @description 读取文件结构
  */
-function topicCompare(a, b){
-    if(a.type < b.type){
-        return -1;
-    }
-    else if(a.type > b.type){
-        return 1;
-    }
-    if(a.type == 'topic' && b.type == 'topic'){
-        return a.id > b.id;
-    }
-    if(a.type == 'dir' && b.type == 'dir'){
-        return a.name > b.name;
-    }
-}
 function readFileHierarchy(rootPath, root, fileData, version) {
     var pa = fs.readdirSync(rootPath);
     pa.forEach(function (ele, index) {
@@ -404,64 +395,70 @@ function readFileHierarchy(rootPath, root, fileData, version) {
         let suffix = ele.substr(ele.lastIndexOf('.'))
         if (blackList.indexOf(suffix) !== -1) return
         
+        // resolve路径之后, 得到绝对路径'\'
         var curPath = path.resolve(rootPath, ele),
             info = fs.statSync(curPath)
-        let convertPath = curPath.replace(/\\/g, '\\\\')
+
+        // 绝对路径转换为相对路径
+        var convertPath = curPath.replace(/C:\\Users\\50809\\Desktop\\CodeEvolution/g, '..')
+        convertPath = convertPath.replace(/\\/g, '/')
+
         if (info.isDirectory()) {
             let tmpdir = { name: convertPath, children: [], type: 'dir', version: version }
             root.children.push(tmpdir)
             readFileHierarchy(curPath, tmpdir, fileData, version);
         } else {
             let curDoc = fileData.find(d => d.filename === convertPath)
-            if(curDoc===undefined){
-                return
-            }
-            var file_type = '';           
-            var flag = false;
-            for(let i = 0; i < root.children.length; i++){
-                if(root.children[i].type == 'topic' && root.children[i].id == curDoc['main_topic']){
-                    flag = true;
-                    root.children[i].children.push({
-                        filename: convertPath,
-                        type: 'file',
-                        topic: curDoc['main_topic'],
-                        id: curDoc['id'],
-                        version: version,
-                        filetype: file_type
-                    })
-                    break;
-                }               
-            }
-            if(!flag){
-                root.children.push({
-                    type: 'topic',
-                    id: curDoc['main_topic'],
-                    children: [],
-                    name: convertPath + '\\' + String(curDoc['main_topic'])
-                })
-                root.children[root.children.length - 1].children.push({
-                    filename: convertPath,
-                    type: 'file',
-                    topic: curDoc['main_topic'],
-                    id: curDoc['id'],
-                    version: version,
-                    filetype: file_type
-                })
-                // console.log(root.children[root.children.length - 1]);
-            }                    
+            if(curDoc === undefined) return 
+            root.children.push({
+                name: convertPath,
+                type: 'file',
+                topic: curDoc['main_topic'],
+                id: curDoc['id'],
+                version: version,
+            })                   
         }
-        root.children = root.children.sort(topicCompare); 
     })
 }
 
 /**
- * @description 读取文件结构
+ * @description 在文件结构图中添加主题节点
+ */
+function addTopicNodes(root){
+    for(let i=0; i<root.children.length; i++){
+        if(root.children[i].type === 'dir')
+            addTopicNodes(root.children[i])
+        if(root.children[i].type === 'file'){
+            let topicNode = root.children.filter(d => d.topicId === root.children[i].topic)
+            if(topicNode.length === 1){
+                topicNode[0].children.push(root.children[i])
+            }
+            else{
+                let newTopicNode = { 
+                    name: 'topic_'+root.children[i].topic, 
+                    topicId: root.children[i].topic,
+                    type: 'topic',
+                    children: []
+                }
+                root.children.push(newTopicNode)
+                newTopicNode.children.push(root.children[i])
+            }
+        }
+        if(root.children[i].type === 'topic'){
+            root.children = root.children.filter(d => d.type != "file")
+            break
+        }
+    }
+}
+
+/**
+ * @description 分类差异文件
  */
 function getDiffDocs(prev, curv, editIds, fileData){
     var prevDocs = fileData.filter(d => d.version === prev),
         curvDocs = fileData.filter(d => d.version === curv)
 
-    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)(.*)")
+    let verReg = new RegExp(lib+"-(/d*/./d*/./d*)(.*)")
     let addDocs = _.differenceBy(curvDocs, prevDocs, d => d['filename'].match(verReg)[2]),
         delDocs = _.differenceBy(prevDocs, curvDocs, d => d['filename'].match(verReg)[2]),
         editDocs = _.groupBy(prevDocs.concat(curvDocs), d => d['filename'].match(verReg)[2])
