@@ -116,8 +116,8 @@ router.get('/getFileHierarchyByVersion', function (req, res, next) {
 
 // 获取两个版本间的差异文件
 router.get('/getDiffDocs', function(req,res,next){
-    let prev = req.query.prev,
-        curv = req.query.curv
+    let prev = req.query.preVer,
+        curv = req.query.curVer
     var diffDocs = getDiffDocs(prev, curv, editIds, fileData)
     res.send(diffDocs)
 })
@@ -471,31 +471,36 @@ function getDiffDocs(prev, curv, editIds, fileData){
     var prevDocs = fileData.filter(d => d.version === prev),
         curvDocs = fileData.filter(d => d.version === curv)
 
-    let verReg = new RegExp(lib+"-(/d*/./d*/./d*)(.*)")
+    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)(.*)")
+
+    // differenceBy: 根据文件名判断前后版本中文件名不同的文件, 即增加和删除的文件
+    // groupBy: 根据文件名对前后版本的文件进行分组, 文件名相同的分到同一组, 文件名不同的单个为一组
     let addDocs = _.differenceBy(curvDocs, prevDocs, d => d['filename'].match(verReg)[2]),
         delDocs = _.differenceBy(prevDocs, curvDocs, d => d['filename'].match(verReg)[2]),
         editDocs = _.groupBy(prevDocs.concat(curvDocs), d => d['filename'].match(verReg)[2])
-    
+
+    // editIds: 按照文件内容判断增加和删除的文件是否存在编辑文件
     var addIds_ = [], delIds_ = [], editIds_ = []
     addDocs.forEach(doc => {
         // 查找是否有属于edit的增加文件(首先保证编辑文件中id是一对一的)
-        let edit_in_add = editIds.filter(d => d.curid === doc.id), preid = -1
+        let edit_in_add = editIds.filter(d => d.curid === doc.id)
         if(edit_in_add.length > 0){
             // 当前版本与前一版本对应的编辑文件id
-            preid = edit_in_add[0].preid
+            let preid = edit_in_add[0].preid
+            // 当比较的版本不相邻时, 需要向前逐个查找
             for(let i=versions.indexOf(curv)-1; i> versions.indexOf(prev); i--){
-                // 继续往前一版本查找
+                // 继续往前一版本查找(前一版本应判断的是curid)
                 let preid_ = editIds.filter(d => d.version === versions[i] && d.curid === preid)
                 if(preid_.length > 0){
                     preid = preid_.preid
                 }
                 else{
-                    addIds_.push(doc.id)
+                    preid = -1
                     break
                 }
             }
             if(preid != -1){
-                editIds_.push([preid, doc.id, 'm'])
+                editIds_.push([preid, doc.id, 'move'])
             } 
         }
         addIds_.push(doc.id)
@@ -503,28 +508,31 @@ function getDiffDocs(prev, curv, editIds, fileData){
 
     delDocs.forEach(doc => {
         // 查找是否有属于edit的删除文件(首先保证编辑文件中id是一对一的)
-        let edit_in_del = editIds.filter(d => d.preid === doc.id), curid = -1
+        let edit_in_del = editIds.filter(d => d.preid === doc.id)
         if(edit_in_del.length > 0){
             // 当前版本与后一版本对应的编辑文件id
-            curid = edit_in_del[0].curid
+            let curid = edit_in_del[0].curid
+            // 当比较的版本不相邻时, 需要向前逐个查找
             for(let i=versions.indexOf(prev)+2; i<=versions.indexOf(curv); i++){
-                // 继续往前一版本查找
+                // 继续往前一版本查找(后一版本应判断的是preid)
                 let curid_ = editIds.filter(d => d.version === versions[i] && d.preid === curid)
                 if(curid_.length > 0){
                     curid = curid_.curid
                 }
                 else{
-                    delIds_.push(doc.id)
+                    curid = -1
                     break
                 }
             }
             if(curid != -1) {
-                editIds_.push([doc.id, curid, 'm'])
+                editIds_.push([doc.id, curid, 'move'])
             }
         }
         delIds_.push(doc.id)
     })
 
+    // addDocs和delDocs中的编辑文件是有移动的编辑文件
+    // editDocs是没有移动的编辑文件
     Object.keys(editDocs).forEach(key => {
         if(editDocs[key].length === 2){
             let item = editDocs[key]
