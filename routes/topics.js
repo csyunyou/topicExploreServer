@@ -103,9 +103,11 @@ router.get('/getFileHierarchyByVersion', function (req, res, next) {
     let directory = libDir.replace(/\\/g, '/')
 
     let root = {
-            name: libDir,
-            type: 'dir',
-            children: []
+            name: directory,
+            children: [], 
+            type: 'dir', 
+            version: version, 
+            topics: []
         }
     readFileHierarchy(directory, root, curFileData, version) 
     addTopicNodes(root)
@@ -404,8 +406,14 @@ function readFileHierarchy(rootPath, root, fileData, version) {
         convertPath = convertPath.replace(/\\/g, '/')
 
         if (info.isDirectory()) {
-            let tmpdir = { name: convertPath, children: [], type: 'dir', version: version }
-            root.children.push(tmpdir)
+            let tmpdir = { 
+                name: convertPath, 
+                children: [], 
+                type: 'dir', 
+                version: version, 
+                topics: []
+            };
+            root.children.push(tmpdir);
             readFileHierarchy(curPath, tmpdir, fileData, version);
         } else {
             let curDoc = fileData.find(d => d.filename === convertPath)
@@ -426,8 +434,12 @@ function readFileHierarchy(rootPath, root, fileData, version) {
  */
 function addTopicNodes(root){
     for(let i=0; i<root.children.length; i++){
-        if(root.children[i].type === 'dir')
+        if(root.children[i].type === 'dir'){
             addTopicNodes(root.children[i])
+            root.topics = root.topics.concat(root.children[i].topics)
+            root.topics = Array.from(new Set(root.topics))
+        }
+            
         if(root.children[i].type === 'file'){
             let topicNode = root.children.filter(d => d.topicId === root.children[i].topic)
             if(topicNode.length === 1){
@@ -441,6 +453,7 @@ function addTopicNodes(root){
                     children: []
                 }
                 root.children.push(newTopicNode)
+                root.topics.push(newTopicNode.topicId)
                 newTopicNode.children.push(root.children[i])
             }
         }
