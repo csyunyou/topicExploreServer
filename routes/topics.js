@@ -107,7 +107,9 @@ router.get('/getFileHierarchyByVersion', function (req, res, next) {
             children: [], 
             type: 'dir', 
             version: version, 
-            topics: []
+            topics: [],
+            diffs: [],
+            fileIds: []
         }
     readFileHierarchy(directory, root, curFileData, version) 
     addTopicNodes(root)
@@ -411,7 +413,9 @@ function readFileHierarchy(rootPath, root, fileData, version) {
                 children: [], 
                 type: 'dir', 
                 version: version, 
-                topics: []
+                topics: [],
+                diffs: [],
+                fileIds: []
             };
             root.children.push(tmpdir);
             readFileHierarchy(curPath, tmpdir, fileData, version);
@@ -424,7 +428,8 @@ function readFileHierarchy(rootPath, root, fileData, version) {
                 topic: curDoc['main_topic'],
                 id: curDoc['id'],
                 version: version,
-            })                   
+                diffs: []
+            })            
         }
     })
 }
@@ -438,22 +443,29 @@ function addTopicNodes(root){
             addTopicNodes(root.children[i])
             root.topics = root.topics.concat(root.children[i].topics)
             root.topics = Array.from(new Set(root.topics))
+            root.fileIds = root.fileIds.concat(root.children[i].fileIds)
+            root.fileIds = Array.from(new Set(root.fileIds))
         }
             
         if(root.children[i].type === 'file'){
             let topicNode = root.children.filter(d => d.topicId === root.children[i].topic)
             if(topicNode.length === 1){
                 topicNode[0].children.push(root.children[i])
+                topicNode[0].fileIds.push(root.children[i].id)
+                root.fileIds.push(root.children[i].id)
             }
             else{
                 let newTopicNode = { 
                     name: 'topic_'+root.children[i].topic, 
                     topicId: root.children[i].topic,
                     type: 'topic',
-                    children: []
+                    children: [],
+                    diffs: [],
+                    fileIds: [root.children[i].id]
                 }
+                root.topics.push(root.children[i].topic)
+                root.fileIds.push(root.children[i].id)
                 root.children.push(newTopicNode)
-                root.topics.push(newTopicNode.topicId)
                 newTopicNode.children.push(root.children[i])
             }
         }
