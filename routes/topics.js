@@ -16,8 +16,8 @@ var libData= {
         infoPath: '../Data/vue/all-original-text.csv',
         diffPath: '../Data/vue/diffIds.csv',
         editPath: '../Data/vue/editIds.csv',
-        topicWordsPath: '../Data/vue/topic_words.csv',
-        docTopicsPath: '../Data/vue/doc_topics.csv',
+        topicWordsPath: '../Data/vue/topic_words_sklearn.csv',
+        docTopicsPath: '../Data/vue/doc_topics_sklearn.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -34,8 +34,8 @@ var libData= {
         infoPath: '../Data/d3/all-original-text.csv',
         diffPath: '../Data/d3/diffIds.csv',
         editPath: '../Data/d3/editIds.csv',
-        topicWordsPath: '../Data/d3/topic_words.csv',
-        docTopicsPath: '../Data/d3/doc_topics.csv',
+        topicWordsPath: '../Data/d3/topic_words_sklearn.csv',
+        docTopicsPath: '../Data/d3/doc_topics_sklearn.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -48,7 +48,7 @@ var libData= {
     }
 }
 
-var lib, topicData, fileData, versions, editIds, normData, curNormData
+var lib, topicData, fileData, versions, diffIds, editIds, normData, curNormData
 
 /* GET home page. */
 router.get('/getLibName', function (req, res, next) {
@@ -58,6 +58,7 @@ router.get('/getLibName', function (req, res, next) {
     topicData = libData[lib].topicData
     fileData = libData[lib].fileData
     versions = libData[lib].versions
+    diffIds = libData[lib].diffIds
     editIds = libData[lib].editIds
     normData = libData[lib].normData
     docTopics = libData[lib].docTopics
@@ -88,9 +89,41 @@ router.get('/getNormOfDiffVecs', function(req, res, next){
     res.send(normData)
 })
 
-//获取文件-主题矩阵
+// 获取文件-主题矩阵
 router.get('/getDocTopics', function(req, res, next){
     res.send(docTopics)
+})
+
+// 获取文件内容
+router.get('/getFileContent', function (req, res, next) {
+    let curName = req.query.curName, preName = req.query.preName
+    let curCode = '', preCode = ''
+
+    if(curName && preName){
+        fs.readFile(curName, 'utf8', (err, data) => {
+            if (err) throw err;
+            curCode = data
+            fs.readFile(preName, 'utf8', (err, data) => {
+                if (err) throw err;
+                preCode = data
+                res.send({curCode: curCode, preCode: preCode})
+            })
+        })
+    }
+    if(curName && !preName){
+        fs.readFile(curName, 'utf8', (err, data) => {
+            if (err) throw err;
+            curCode = data
+            res.send({curCode: curCode, preCode: preCode})
+        })
+    }
+    if(!curName && preName){
+        fs.readFile(preName, 'utf8', (err, data) => {
+            if (err) throw err;
+            preCode = data
+            res.send({curCode: curCode, preCode: preCode})
+        })
+    }  
 })
 
 // 获取文件结构
@@ -120,7 +153,7 @@ router.get('/getFileHierarchyByVersion', function (req, res, next) {
 router.get('/getDiffDocs', function(req,res,next){
     let prev = req.query.preVer,
         curv = req.query.curVer
-    var diffDocs = getDiffDocs(prev, curv, editIds, fileData)
+    var diffDocs = getDiffDocs(prev, curv, diffIds, editIds, fileData)
     res.send(diffDocs)
 })
 
@@ -171,8 +204,8 @@ function preprocess(lib){
 function readTopicWords(fpath){
     var topics = fs.readFileSync(fpath, 'utf-8')
     topics = topics.split('\r\n')
-    // 删除最后一个元素(空字符串)
-    topics.pop()
+    topics.pop() // 删除最后一个元素(空字符串)
+
     let new_topics = []
     for(let i=0; i<topics.length; i+=2){
         let words = topics[i].split(','),
@@ -251,20 +284,19 @@ function getFileData(fpath, docTopics) {
         doc['filename'] = doc['filename'].replace(/\\/g, '/')
 
         // 重新构造doc-topic矩阵
-        let topicProbs = docTopics[doc['id']]     
-        let id = 0, newTopicProbs = []
-        topicProbs.forEach(d =>{
-            // weight表示文档在每个主题上的概率
-            newTopicProbs.push({'topic_id': id, 'weight': d})
-            id++
-        })
-        newTopicProbs.sort(function(a, b){
-            return b.weight - a.weight
-        })
-
-        doc['main_topic'] = newTopicProbs[0]['topic_id']
-        doc['main_weight'] = newTopicProbs[0]['weight']
-        doc['topicDistribution'] = newTopicProbs 
+        let topicProbs = docTopics[doc['id']] 
+        // 添加-1的主题, 即在各个主题上的概率相同
+        if((new Set(topicProbs)).size == 1){
+            doc['main_topic'] = -1
+            doc['main_weight'] = topicProbs[0]
+        }
+        else{
+            let maxProb = Math.max(...topicProbs),
+                maxId = topicProbs.indexOf(maxProb) 
+            doc['main_topic'] = maxId
+            doc['main_weight'] = maxProb
+        }
+        doc['topicDistribution'] = topicProbs
     })
     return fileData 
 }
@@ -300,7 +332,7 @@ function getVersions(lib, src) {
  */
 function readEditIds(fpath){
     const text = fs.readFileSync(fpath, 'utf-8')
-    let header = ['preid', 'curid', 'version']
+    let header = ['preid', 'curid', 'version', 'type']
     let editIds = parse(text, {
         columns: header
     })
@@ -381,7 +413,6 @@ function getNorm(vec){
  */
 function getNormData(docTopics){
     var norm = []
-    var sum = 0
     for(let i = 0; i < docTopics.length; i++){
         let vec = docTopics[i]
         norm.push(getNorm(vec))
@@ -428,7 +459,8 @@ function readFileHierarchy(rootPath, root, fileData, version) {
                 topic: curDoc['main_topic'],
                 id: curDoc['id'],
                 version: version,
-                diffs: []
+                diffs: [],
+                fileIds: [curDoc['id']]
             })            
         }
     })
@@ -479,80 +511,19 @@ function addTopicNodes(root){
 /**
  * @description 分类差异文件
  */
-function getDiffDocs(prev, curv, editIds, fileData){
-    var prevDocs = fileData.filter(d => d.version === prev),
-        curvDocs = fileData.filter(d => d.version === curv)
+function getDiffDocs(prev, curv, diffIds, editIds, fileData){
+    var preDocs = fileData.filter(d => d.version == prev),
+        curDocs = fileData.filter(d => d.version == curv)
 
-    let verReg = new RegExp(lib+"-(\\d*\\.\\d*\\.\\d*)(.*)")
+    var diffIds_ = diffIds.filter(d => d.version == curv),
+        editIds_ = editIds.filter(d => d.version == curv)
 
-    // differenceBy: 根据文件名判断前后版本中文件名不同的文件, 即增加和删除的文件
-    // groupBy: 根据文件名对前后版本的文件进行分组, 文件名相同的分到同一组, 文件名不同的单个为一组
-    let addDocs = _.differenceBy(curvDocs, prevDocs, d => d['filename'].match(verReg)[2]),
-        delDocs = _.differenceBy(prevDocs, curvDocs, d => d['filename'].match(verReg)[2]),
-        editDocs = _.groupBy(prevDocs.concat(curvDocs), d => d['filename'].match(verReg)[2])
+    var addIds = diffIds_.filter(d => d.type == 'add'),
+        delIds = diffIds_.filter(d => d.type == 'del')
 
-    // editIds: 按照文件内容判断增加和删除的文件是否存在编辑文件
-    var addIds_ = [], delIds_ = [], editIds_ = []
-    addDocs.forEach(doc => {
-        // 查找是否有属于edit的增加文件(首先保证编辑文件中id是一对一的)
-        let edit_in_add = editIds.filter(d => d.curid === doc.id)
-        if(edit_in_add.length > 0){
-            // 当前版本与前一版本对应的编辑文件id
-            let preid = edit_in_add[0].preid
-            // 当比较的版本不相邻时, 需要向前逐个查找
-            for(let i=versions.indexOf(curv)-1; i> versions.indexOf(prev); i--){
-                // 继续往前一版本查找(前一版本应判断的是curid)
-                let preid_ = editIds.filter(d => d.version === versions[i] && d.curid === preid)
-                if(preid_.length > 0){
-                    preid = preid_.preid
-                }
-                else{
-                    preid = -1
-                    break
-                }
-            }
-            if(preid != -1){
-                editIds_.push([preid, doc.id, 'move'])
-            } 
-        }
-        addIds_.push(doc.id)
-    })
-
-    delDocs.forEach(doc => {
-        // 查找是否有属于edit的删除文件(首先保证编辑文件中id是一对一的)
-        let edit_in_del = editIds.filter(d => d.preid === doc.id)
-        if(edit_in_del.length > 0){
-            // 当前版本与后一版本对应的编辑文件id
-            let curid = edit_in_del[0].curid
-            // 当比较的版本不相邻时, 需要向前逐个查找
-            for(let i=versions.indexOf(prev)+2; i<=versions.indexOf(curv); i++){
-                // 继续往前一版本查找(后一版本应判断的是preid)
-                let curid_ = editIds.filter(d => d.version === versions[i] && d.preid === curid)
-                if(curid_.length > 0){
-                    curid = curid_.curid
-                }
-                else{
-                    curid = -1
-                    break
-                }
-            }
-            if(curid != -1) {
-                editIds_.push([doc.id, curid, 'move'])
-            }
-        }
-        delIds_.push(doc.id)
-    })
-
-    // addDocs和delDocs中的编辑文件是有移动的编辑文件
-    // editDocs是没有移动的编辑文件
-    Object.keys(editDocs).forEach(key => {
-        if(editDocs[key].length === 2){
-            let item = editDocs[key]
-            editIds_.push([item[0].id, item[1].id])
-        }  
-    })
-
-    return {'add': addIds_, 'del': delIds_, 'edit': editIds_}
+    console.log('pre file num:', preDocs.length, 'cur file num:', curDocs.length)
+    console.log('add file num:', addIds.length, 'del file num:', delIds.length, 'edit file num:', editIds_.length)
+    return {'add': addIds, 'del': delIds, 'edit': editIds_}
 }
 
 module.exports = router;
