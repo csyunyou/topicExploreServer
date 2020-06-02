@@ -16,8 +16,8 @@ var libData= {
         infoPath: '../Data/vue/all-original-text.csv',
         diffPath: '../Data/vue/diffIds.csv',
         editPath: '../Data/vue/editIds.csv',
-        topicWordsPath: '../Data/vue/topic_words_sklearn.csv',
-        docTopicsPath: '../Data/vue/doc_topics_sklearn.csv',
+        topicWordsPath: '../Data/vue/topic_words_sklearn_14.csv',
+        docTopicsPath: '../Data/vue/doc_topics_sklearn_14.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -34,8 +34,8 @@ var libData= {
         infoPath: '../Data/d3/all-original-text.csv',
         diffPath: '../Data/d3/diffIds.csv',
         editPath: '../Data/d3/editIds.csv',
-        topicWordsPath: '../Data/d3/topic_words_sklearn.csv',
-        docTopicsPath: '../Data/d3/doc_topics_sklearn.csv',
+        topicWordsPath: '../Data/d3/topic_words_sklearn_14.csv',
+        docTopicsPath: '../Data/d3/doc_topics_sklearn_14.csv',
         topicWords: null,
         docTopics: null,
         topicData: null,
@@ -174,7 +174,8 @@ function preprocess(lib){
     libData[lib].docTopics = readDocTopics(libData[lib].docTopicsPath)
     console.log('doc-topic finish')
     // 单词重新赋权重
-    libData[lib].topicData = getTopicData(libData[lib].topicWords)
+    // libData[lib].topicData = getTopicData(libData[lib].topicWords)
+    libData[lib].topicData = libData[lib].topicWords
     console.log('new-topic-word finish')
     // 文件数据
     libData[lib].fileData = getFileData(libData[lib].infoPath, libData[lib].docTopics)
@@ -502,7 +503,14 @@ function addTopicNodes(root){
             }
         }
         if(root.children[i].type === 'topic'){
-            root.children = root.children.filter(d => d.type != "file")
+            root.children = root.children.filter(d => d.type != "file")     // 删除文件节点
+            let topicNodes = root.children.filter(d => d.type == "topic")   // 保存主题节点
+            root.children = root.children.filter(d => d.type != "topic")    // 删除主题节点
+            topicNodes.sort(function(a, b){return a.topicId - b.topicId})   // 主题节点排序
+            let negTopicNode = topicNodes.filter(d => d.topicId == -1)       // 保存主题为-1的节点
+            topicNodes = topicNodes.filter(d => d.topicId != -1)            // 删除主题为-1的节点
+            if(negTopicNode.length > 0) topicNodes.push(negTopicNode[0])    // 重新加入主题为-1的节点
+            topicNodes.forEach(d => root.children.push(d))                  // 重新加入主题节点
             break
         }
     }
@@ -518,8 +526,8 @@ function getDiffDocs(prev, curv, diffIds, editIds, fileData){
     var diffIds_ = diffIds.filter(d => d.version == curv),
         editIds_ = editIds.filter(d => d.version == curv)
 
-    var addIds = diffIds_.filter(d => d.type == 'add'),
-        delIds = diffIds_.filter(d => d.type == 'del')
+    var addIds = diffIds_.filter(d => d.type == 'add').map(d => d.id),
+        delIds = diffIds_.filter(d => d.type == 'del').map(d => d.id)
 
     console.log('pre file num:', preDocs.length, 'cur file num:', curDocs.length)
     console.log('add file num:', addIds.length, 'del file num:', delIds.length, 'edit file num:', editIds_.length)
